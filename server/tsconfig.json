@@ -10,7 +10,7 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "paths": {
-      "@hq/shared": ["../shared/src/types.ts"]
+      "@hq/shared": ["../shared/dist/types"]
     }
   },
   "include": ["src/**/*"],
