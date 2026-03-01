@@ -93,13 +93,16 @@ resource "aws_instance" "dev" {
   iam_instance_profile = aws_iam_instance_profile.ec2_ssm_instance_profile.name
 
   # Install nginx and reverse-proxy port 80 → Node.js on 4000
-  # WebSocket upgrade headers are forwarded so Socket.io works correctly
+  # WebSocket upgrade headers are forwarded so Socket.io works correctly.
+  # The sed removes `default_server` from the stock Amazon Linux 2 nginx.conf
+  # so our conf.d block becomes the sole default and handles all requests.
   user_data = <<-EOF
     #!/bin/bash
     yum install -y nginx
+    sed -i 's/ default_server//g' /etc/nginx/nginx.conf
     cat > /etc/nginx/conf.d/hq.conf <<'NGINX'
     server {
-      listen 80;
+      listen 80 default_server;
       location / {
         proxy_pass         http://localhost:4000;
         proxy_http_version 1.1;

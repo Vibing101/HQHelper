@@ -176,3 +176,37 @@ Addressed all high and medium priority issues found in a full codebase review. C
 Provisioned the initial dev EC2 baseline using the default VPC, SSM (Session Manager), and a restricted security group.
 ### infra/terraform/envs/dev/main.tf
 - Added Phase 1 dev baseline resources: default VPC + subnet selection, EC2 IAM role/instance profile, security group, Amazon Linux 2 AMI, and an EC2 instance.
+
+---
+
+## [2026-03-01] — Cloudflare + public hosting IaC
+
+**Category:** Infrastructure
+
+Extended Terraform to provision Cloudflare Pages (frontend CDN) and wire up the EC2 backend behind Cloudflare's proxy, publishing the app at `hqv2.savvy-des.com`.
+
+### `infra/terraform/envs/dev/versions.tf`
+- Added `cloudflare/cloudflare ~> 4.0` to `required_providers`. Token is read from `CLOUDFLARE_API_TOKEN` env var automatically — no credentials in source.
+
+### `infra/terraform/envs/dev/variables.tf`
+- Added `cloudflare_account_id` (required, supplied via `TF_VAR_cloudflare_account_id`), `cf_zone_name` (default `savvy-des.com`), and `cf_pages_project_name` (default `hq-companion-dev`).
+- Added `instance_type` variable (default `t3.micro`) which was referenced in `main.tf` but previously undeclared.
+
+### `infra/terraform/envs/dev/main.tf`
+- **Security group**: added port 80 ingress from `0.0.0.0/0` (Cloudflare proxy IPs — raw internet not reachable since CF sits in front).
+- **EC2**: set `associate_public_ip_address = true` explicitly; added `user_data` script that installs nginx, strips the stock `default_server` from Amazon Linux 2's main nginx config, and writes a `conf.d/hq.conf` that reverse-proxies port 80 → localhost:4000 with WebSocket upgrade headers.
+- **Elastic IP** (`aws_eip.dev`): attached to the instance so the DNS A record never needs updating after a stop/start cycle.
+- Moved `output "dev_instance_id"` to `outputs.tf`.
+
+### `infra/terraform/envs/dev/cloudflare.tf` _(new file)_
+- `data "cloudflare_zone"` — looks up the zone ID for `savvy-des.com`.
+- `cloudflare_pages_project` — creates the Pages project in direct-upload mode (no git integration needed; deploy via `wrangler pages deploy`).
+- `cloudflare_pages_domain` — attaches `hqv2.savvy-des.com` as a custom domain; `depends_on = [cloudflare_record.pages]` ensures the DNS CNAME exists before CF attempts domain verification.
+- `cloudflare_record.pages` — CNAME `hqv2` → `hq-companion-dev.pages.dev` (proxied).
+- `cloudflare_record.api` — A record `api.hqv2` → EC2 Elastic IP (proxied; CF handles SSL and WebSocket for Socket.io).
+
+### `infra/terraform/envs/dev/outputs.tf`
+- Replaced placeholder comment with five outputs: `dev_instance_id`, `dev_public_ip`, `pages_url`, `app_url`, `api_url`.
+
+### `client/.env.production.example` _(new file)_
+- Documents the required build-time env var `VITE_SERVER_URL=https://api.hqv2.savvy-des.com`. Copy to `client/.env.production` (gitignored) before running `npm run build`.

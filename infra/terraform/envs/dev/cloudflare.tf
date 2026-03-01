@@ -9,11 +9,15 @@ resource "cloudflare_pages_project" "hq_client" {
   production_branch = "main"
 }
 
-# Attach the custom domain to the Pages project
+# Attach the custom domain to the Pages project.
+# Cloudflare verifies the domain by checking the CNAME record, so the DNS
+# record must exist before this resource is created.
 resource "cloudflare_pages_domain" "hq_client" {
   account_id   = var.cloudflare_account_id
   project_name = cloudflare_pages_project.hq_client.name
   domain       = "hqv2.${var.cf_zone_name}"
+
+  depends_on = [cloudflare_record.pages]
 }
 
 # DNS CNAME: hqv2.savvy-des.com → Pages (proxied, CF handles SSL)
