@@ -5,6 +5,7 @@ import { PartyModel } from "../models/Party";
 import { HERO_BASE_STATS } from "@hq/shared";
 import type { HeroTypeId } from "@hq/shared";
 import { docToJson } from "../utils/docToJson";
+import type { Server } from "socket.io";
 
 const router = Router();
 const nanoidEquip = customAlphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
@@ -54,6 +55,9 @@ router.post("/", async (req, res) => {
       });
     }
 
+    const io = req.app.get("io") as Server;
+    io.to(`campaign:${campaignId}`).emit("state_update", { type: "HERO_CREATED", hero: docToJson(hero) });
+
     return res.status(201).json({ hero: docToJson(hero) });
   } catch (err) {
     console.error(err);
@@ -93,6 +97,10 @@ router.patch("/:id/gold", async (req, res) => {
 
     hero.gold = Math.max(0, hero.gold + amount);
     await hero.save();
+
+    const io = req.app.get("io") as Server;
+    io.to(`campaign:${hero.campaignId}`).emit("state_update", { type: "HERO_UPDATED", hero: docToJson(hero) });
+
     return res.json({ hero: docToJson(hero) });
   } catch (err) {
     return res.status(500).json({ error: "Failed to update gold" });
@@ -114,6 +122,10 @@ router.post("/:id/equipment", async (req, res) => {
 
     (hero.equipment as any).push({ id: nanoidEquip(), name, attackBonus, defendBonus });
     await hero.save();
+
+    const io = req.app.get("io") as Server;
+    io.to(`campaign:${hero.campaignId}`).emit("state_update", { type: "HERO_UPDATED", hero: docToJson(hero) });
+
     return res.status(201).json({ hero: docToJson(hero) });
   } catch (err) {
     return res.status(500).json({ error: "Failed to add equipment" });
@@ -128,6 +140,10 @@ router.delete("/:id/equipment/:equipId", async (req, res) => {
 
     (hero.equipment as any) = hero.equipment.filter((e: any) => e.id !== req.params.equipId);
     await hero.save();
+
+    const io = req.app.get("io") as Server;
+    io.to(`campaign:${hero.campaignId}`).emit("state_update", { type: "HERO_UPDATED", hero: docToJson(hero) });
+
     return res.json({ hero: docToJson(hero) });
   } catch (err) {
     return res.status(500).json({ error: "Failed to remove equipment" });
@@ -149,6 +165,10 @@ router.post("/:id/consumables", async (req, res) => {
 
     (hero.consumables as any).push({ id: nanoidEquip(), name, quantity, effect });
     await hero.save();
+
+    const io = req.app.get("io") as Server;
+    io.to(`campaign:${hero.campaignId}`).emit("state_update", { type: "HERO_UPDATED", hero: docToJson(hero) });
+
     return res.status(201).json({ hero: docToJson(hero) });
   } catch (err) {
     return res.status(500).json({ error: "Failed to add consumable" });

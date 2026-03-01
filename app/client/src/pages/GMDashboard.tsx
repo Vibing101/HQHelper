@@ -105,6 +105,9 @@ export default function GMDashboard() {
       if (update.type === "HERO_UPDATED") {
         setHeroes((prev) => prev.map((h) => (h.id === update.hero.id ? update.hero : h)));
       }
+      if (update.type === "HERO_CREATED") {
+        setHeroes((prev) => [...prev, update.hero]);
+      }
     });
     return unsub;
   }, [campaignId]);
@@ -177,6 +180,15 @@ export default function GMDashboard() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "completed" }),
+    });
+    loadCampaign();
+  }
+
+  async function unlockQuest(questId: string) {
+    await fetch(`/api/campaigns/${campaignId}/quest-log/${questId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "available" }),
     });
     loadCampaign();
   }
@@ -326,6 +338,8 @@ export default function GMDashboard() {
               campaign={campaign}
               selectedQuestId={selectedQuestId}
               onSelectQuest={setSelectedQuestId}
+              isGM={true}
+              onUnlockQuest={unlockQuest}
             />
             {selectedQuestId && (
               <div className="card space-y-3">

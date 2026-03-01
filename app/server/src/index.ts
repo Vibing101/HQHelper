@@ -29,6 +29,8 @@ const io = new Server(httpServer, {
   cors: { origin: CLIENT_URL, methods: ["GET", "POST"] },
 });
 
+app.set("io", io);
+
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
 app.use(cors({ origin: CLIENT_URL }));

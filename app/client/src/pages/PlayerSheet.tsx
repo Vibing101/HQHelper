@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import type { Hero } from "@hq/shared";
 import { GEAR_CATALOG, HERO_SPELL_ACCESS, SPELLS } from "@hq/shared";
-import { onDiceRoll, onStateUpdate, sendCommand } from "../socket";
+import { joinSession, onDiceRoll, onStateUpdate, sendCommand } from "../socket";
 import StatAdjuster from "../components/StatAdjuster";
 
 const HERO_ICONS: Record<string, string> = {
@@ -48,6 +48,9 @@ export default function PlayerSheet() {
   const [diceToast, setDiceToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Gold adjustment
+  const [goldInput, setGoldInput] = useState("");
+
   function fetchPartyGold() {
     const cid = sessionStorage.getItem("campaignId");
     if (!cid) return;
@@ -59,6 +62,15 @@ export default function PlayerSheet() {
       })
       .catch(() => {/* non-critical */});
   }
+
+  // Join campaign socket room so real-time events work even after a page refresh
+  useEffect(() => {
+    const campaignId = sessionStorage.getItem("campaignId");
+    const playerId = sessionStorage.getItem("playerId") ?? undefined;
+    if (campaignId) {
+      joinSession({ campaignId, role: "player", playerId });
+    }
+  }, []);
 
   useEffect(() => {
     if (!heroId) return;
@@ -104,6 +116,16 @@ export default function PlayerSheet() {
   function useItem(itemId: string) {
     if (!heroId) return;
     sendCommand({ type: "USE_ITEM", heroId, itemId });
+  }
+
+  async function adjustGold() {
+    if (!heroId || !goldInput) return;
+    await fetch(`/api/heroes/${heroId}/gold`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: Number(goldInput) }),
+    });
+    setGoldInput("");
   }
 
   function toggleSpell(spellName: string) {
@@ -277,6 +299,26 @@ export default function PlayerSheet() {
 
         {tab === "inventory" && (
           <div className="space-y-4">
+            <div className="card space-y-3">
+              <h2 className="text-sm font-bold text-hq-amber uppercase tracking-wider">Gold</h2>
+              <p className="text-parchment/70 text-sm">
+                You have <span className="text-hq-amber font-bold">{hero.gold}</span> 💰
+                {partyGold !== null && <span className="text-parchment/40"> (Party total: {partyGold})</span>}
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  className="input flex-1"
+                  placeholder="Amount (negative to spend)"
+                  value={goldInput}
+                  onChange={(e) => setGoldInput(e.target.value)}
+                />
+                <button className="btn-secondary" onClick={adjustGold} disabled={!goldInput}>
+                  Update
+                </button>
+              </div>
+            </div>
+
             <div className="card space-y-3">
               <h2 className="text-sm font-bold text-hq-amber uppercase tracking-wider">Equipment</h2>
               {hero.equipment.length === 0 ? (

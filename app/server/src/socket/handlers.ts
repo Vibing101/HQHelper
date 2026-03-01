@@ -2,7 +2,7 @@ import type { Server, Socket } from "socket.io";
 import { SessionModel } from "../models/Session";
 import { HeroModel } from "../models/Hero";
 import type { SocketCommand, EffectiveRules } from "@hq/shared";
-import { MONSTER_TYPES, QUESTS } from "@hq/shared";
+import { MONSTER_TYPES, QUESTS, GEAR_CATALOG, HERO_SPELL_ACCESS } from "@hq/shared";
 import { docToJson } from "../utils/docToJson";
 
 export function registerSocketHandlers(io: Server, socket: Socket) {
@@ -124,8 +124,8 @@ async function handleSelectSpell(io: Server, socket: Socket, cmd: Extract<Socket
     return socket.emit("error", { message: "Not authorized" });
   }
 
-  const spellLimits: Partial<Record<string, number>> = { wizard: 4, elf: 2 };
-  const limit = spellLimits[hero.heroTypeId];
+  const access = HERO_SPELL_ACCESS[hero.heroTypeId as keyof typeof HERO_SPELL_ACCESS];
+  const limit = access?.limit;
   if (!limit) return socket.emit("error", { message: "This hero cannot cast spells" });
 
   if (chosen) {
@@ -203,11 +203,25 @@ async function handleUseItem(io: Server, socket: Socket, cmd: Extract<SocketComm
   const itemIdx = hero.consumables.findIndex((i: any) => i.id === itemId);
   if (itemIdx === -1) return socket.emit("error", { message: "Item not found" });
 
-  const item = hero.consumables[itemIdx];
-  if ((item as any).quantity <= 1) {
+  const item = hero.consumables[itemIdx] as any;
+  if (item.quantity <= 1) {
     hero.consumables.splice(itemIdx, 1);
   } else {
-    (item as any).quantity -= 1;
+    item.quantity -= 1;
+  }
+
+  // Apply the consumable's effect
+  const catalogItem = GEAR_CATALOG.find((g) => g.name === item.name);
+  if (catalogItem) {
+    if (catalogItem.id === "healing_potion") {
+      hero.bodyPointsCurrent = Math.min(hero.bodyPointsMax, hero.bodyPointsCurrent + 4);
+    } else if (catalogItem.id === "healing_herb") {
+      hero.bodyPointsCurrent = Math.min(hero.bodyPointsMax, hero.bodyPointsCurrent + 2);
+    } else if (catalogItem.id === "holy_water") {
+      hero.statusFlags.isInShock = false;
+      if (hero.mindPointsCurrent === 0) hero.mindPointsCurrent = 1;
+    }
+    hero.statusFlags.isDead = hero.bodyPointsCurrent === 0;
   }
 
   await hero.save();
