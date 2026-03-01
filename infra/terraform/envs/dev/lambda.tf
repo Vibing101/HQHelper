@@ -98,10 +98,7 @@ resource "aws_lambda_function_url" "wake" {
   authorization_type = "NONE"
 
   cors {
-    allow_origins = [
-      "https://hqv2.${var.cf_zone_name}",
-      "https://${var.cf_pages_project_name}.pages.dev",
-    ]
+    allow_origins = ["https://HQv2.${var.cf_zone_name}"]
     allow_methods = ["GET", "POST"]
     allow_headers = ["content-type"]
   }

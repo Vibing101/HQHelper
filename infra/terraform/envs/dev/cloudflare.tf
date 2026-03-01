@@ -2,58 +2,46 @@ data "cloudflare_zone" "savvy_des" {
   name = var.cf_zone_name
 }
 
-# Cloudflare Pages project (direct-upload mode)
-resource "cloudflare_pages_project" "hq_client" {
-  account_id        = var.cloudflare_account_id
-  name              = var.cf_pages_project_name
-  production_branch = "main"
+# ── Tunnel secret (32 random bytes → base64) ──────────────────────────────────
+
+resource "random_id" "tunnel_secret" {
+  byte_length = 32
 }
 
-# Attach the custom domain to the Pages project.
-# Cloudflare verifies the domain by checking the CNAME record, so the DNS
-# record must exist before this resource is created.
-resource "cloudflare_pages_domain" "hq_client" {
-  account_id   = var.cloudflare_account_id
-  project_name = cloudflare_pages_project.hq_client.name
-  domain       = "hqv2.${var.cf_zone_name}"
+# ── Cloudflare Tunnel ─────────────────────────────────────────────────────────
 
-  depends_on = [cloudflare_record.pages]
+resource "cloudflare_tunnel" "hq" {
+  account_id = var.cloudflare_account_id
+  name       = "hq-dev-tunnel"
+  secret     = random_id.tunnel_secret.b64_std
 }
 
-# DNS CNAME: hqv2.savvy-des.com → Pages (proxied, CF handles SSL)
-resource "cloudflare_record" "pages" {
-  zone_id = data.cloudflare_zone.savvy_des.id
-  name    = "hqv2"
-  type    = "CNAME"
-  content = "${var.cf_pages_project_name}.pages.dev"
-  proxied = true
-}
+# ── Tunnel ingress config (managed via Cloudflare API — no config.yml on EC2) ─
+# cloudflared reads this remotely when started with 'service install <TOKEN>'.
 
-# DNS A: api.hqv2.savvy-des.com → EC2 Elastic IP (proxied, CF handles SSL + WebSocket)
-resource "cloudflare_record" "api" {
-  zone_id = data.cloudflare_zone.savvy_des.id
-  name    = "api.hqv2"
-  type    = "A"
-  content = aws_eip.dev.public_ip
-  proxied = true
-}
+resource "cloudflare_tunnel_config" "hq" {
+  account_id = var.cloudflare_account_id
+  tunnel_id  = cloudflare_tunnel.hq.id
 
-# Build the client locally and deploy to CF Pages as part of terraform apply.
-# CLOUDFLARE_API_TOKEN is already in the shell (required for the CF provider),
-# so wrangler picks it up automatically — no extra variable needed.
-resource "null_resource" "deploy_frontend" {
-  triggers = {
-    pages_project = cloudflare_pages_project.hq_client.id
-  }
-
-  provisioner "local-exec" {
-    working_dir = "${path.root}/../../../../"
-    command     = "npm run build && npx wrangler pages deploy app/client/dist --project-name=${var.cf_pages_project_name} --branch=main"
-    environment = {
-      VITE_SERVER_URL = "https://api.hqv2.${var.cf_zone_name}"
-      VITE_WAKE_URL   = aws_lambda_function_url.wake.function_url
+  config {
+    ingress_rule {
+      hostname = "HQv2.${var.cf_zone_name}"
+      service  = "http://localhost:4000"
+    }
+    # Catch-all: any other hostname returns 404
+    ingress_rule {
+      service = "http_status:404"
     }
   }
+}
 
-  depends_on = [cloudflare_pages_project.hq_client]
+# ── DNS: HQv2.savvy-des.com → tunnel ─────────────────────────────────────────
+# Proxied (orange cloud) so Cloudflare handles SSL for browsers.
+
+resource "cloudflare_record" "hq" {
+  zone_id = data.cloudflare_zone.savvy_des.id
+  name    = "HQv2"
+  type    = "CNAME"
+  content = "${cloudflare_tunnel.hq.id}.cfargotunnel.com"
+  proxied = true
 }

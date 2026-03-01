@@ -1,0 +1,17 @@
+# Copy this file to terraform.tfvars and fill in the values.
+# terraform.tfvars is gitignored — never commit it.
+
+# Your Cloudflare account ID (right sidebar of any CF dashboard page)
+cloudflare_account_id = "your-cloudflare-account-id"
+
+# Restrict SSH to your IP for security (find it with: curl ifconfig.me)
+admin_cidr = "x.x.x.x/32"
+
+# Contents of your SSH public key (cat ~/.ssh/id_ed25519.pub)
+ssh_public_key = "ssh-ed25519 AAAA... you@machine"
+
+# Optional overrides (defaults are fine for dev):
+# aws_region    = "eu-central-1"
+# instance_type = "t3.small"
+# cf_zone_name  = "savvy-des.com"
+# github_repo   = "KaiChuul/HQ_Companioon_V5"

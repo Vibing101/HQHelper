@@ -3,30 +3,18 @@ locals {
     Project     = "HQ_CompanionApp"
     Environment = "dev"
   }
+  hostname = "HQv2.${var.cf_zone_name}"
 }
 
-data "aws_vpc" "default" {
-  default = true
-}
+# ── AMI: Ubuntu 24.04 LTS (Canonical) ────────────────────────────────────────
 
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-}
-
-data "aws_ami" "amazon_linux_2" {
+data "aws_ami" "ubuntu" {
   most_recent = true
-
-  owners = [
-    # Amazon
-    "137112412989"
-  ]
+  owners      = ["099720109477"] # Canonical
 
   filter {
     name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
   }
 
   filter {
@@ -35,18 +23,32 @@ data "aws_ami" "amazon_linux_2" {
   }
 }
 
+data "aws_vpc" "default" {
+  default = true
+}
+
+# ── SSH Key Pair ──────────────────────────────────────────────────────────────
+
+resource "aws_key_pair" "admin" {
+  key_name   = "hq-dev-admin"
+  public_key = var.ssh_public_key
+  tags       = local.tags
+}
+
+# ── Security Group: SSH only ──────────────────────────────────────────────────
+# No port 80/443/4000 — cloudflared creates an outbound-only tunnel.
+
 resource "aws_security_group" "dev" {
   name        = "hq-dev-sg"
-  description = "HTTP from Cloudflare; all egress"
+  description = "SSH from admin only; all egress. Web traffic via Cloudflare Tunnel (outbound)."
   vpc_id      = data.aws_vpc.default.id
 
-  # Cloudflare proxies inbound traffic — EC2 only needs port 80
   ingress {
-    description = "HTTP from Cloudflare proxy"
-    from_port   = 80
-    to_port     = 80
+    description = "SSH from admin"
+    from_port   = 22
+    to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.admin_cidr]
   }
 
   egress {
@@ -58,6 +60,8 @@ resource "aws_security_group" "dev" {
 
   tags = local.tags
 }
+
+# ── IAM: SSM access (optional but handy for browser-based shell) ──────────────
 
 resource "aws_iam_role" "ec2_ssm_role" {
   name = "hq-dev-ec2-ssm-role"
@@ -72,120 +76,122 @@ resource "aws_iam_role" "ec2_ssm_role" {
   })
 }
 
-resource "aws_iam_instance_profile" "ec2_ssm_instance_profile" {
+resource "aws_iam_instance_profile" "ec2_ssm" {
   name = "hq-dev-ec2-ssm-profile"
   role = aws_iam_role.ec2_ssm_role.name
 }
 
-resource "aws_iam_role_policy_attachment" "ec2_ssm_attachment" {
+resource "aws_iam_role_policy_attachment" "ec2_ssm" {
   role       = aws_iam_role.ec2_ssm_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-resource "aws_instance" "dev" {
-  ami           = data.aws_ami.amazon_linux_2.id
-  instance_type = var.instance_type
+# ── EC2 Instance ──────────────────────────────────────────────────────────────
 
-  subnet_id                   = data.aws_subnets.default.ids[0]
+resource "aws_instance" "dev" {
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = var.instance_type
+  key_name      = aws_key_pair.admin.key_name
+
   vpc_security_group_ids      = [aws_security_group.dev.id]
   associate_public_ip_address = true
-
-  hibernation = true
+  iam_instance_profile        = aws_iam_instance_profile.ec2_ssm.name
 
   root_block_device {
-    encrypted   = true
     volume_size = 20
+    volume_type = "gp3"
   }
 
-  iam_instance_profile = aws_iam_instance_profile.ec2_ssm_instance_profile.name
-
-  # Full bootstrap: installs Node 20, MongoDB 7, clones the app, builds it,
-  # runs it as a systemd service, and puts nginx in front.
-  # user_data runs asynchronously — the instance reports healthy ~3-5 min
-  # before the app is fully up. CF will retry until it responds.
-  user_data = <<-EOF
+  # user_data bootstraps the full stack on first boot.
+  # Terraform interpolates ${...} before sending to EC2.
+  # Shell $ signs inside inner heredocs are safe — Terraform only looks for ${...}.
+  user_data = <<-USERDATA
     #!/bin/bash
     set -euo pipefail
+    exec > /var/log/user-data.log 2>&1
 
-    # ── System ──────────────────────────────────────────────────────────────
-    yum update -y
-    yum install -y git
+    # ── System ────────────────────────────────────────────────────────────────
+    apt-get update -y
+    apt-get install -y git curl gnupg
 
-    # ── Node.js 20 ──────────────────────────────────────────────────────────
-    curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-    yum install -y nodejs
+    # ── Node.js 20 ────────────────────────────────────────────────────────────
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt-get install -y nodejs
 
-    # ── MongoDB 7 ───────────────────────────────────────────────────────────
-    cat > /etc/yum.repos.d/mongodb-org-7.0.repo <<'MONGOREPO'
-    [mongodb-org-7.0]
-    name=MongoDB Repository
-    baseurl=https://repo.mongodb.org/yum/amazon/2/mongodb-org/7.0/x86_64/
-    gpgcheck=1
-    enabled=1
-    gpgkey=https://www.mongodb.org/static/pgp/server-7.0.asc
-    MONGOREPO
-    yum install -y mongodb-org
-    systemctl enable mongod
-    systemctl start mongod
+    # ── MongoDB 8 (Ubuntu 24.04 / Noble) ──────────────────────────────────────
+    curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | \
+      gpg -o /usr/share/keyrings/mongodb-server-8.0.gpg --dearmor
+    echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] \
+      https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" | \
+      tee /etc/apt/sources.list.d/mongodb-org-8.0.list
+    apt-get update -y
+    apt-get install -y mongodb-org
+    systemctl enable --now mongod
 
-    # ── App ─────────────────────────────────────────────────────────────────
+    # ── cloudflared ───────────────────────────────────────────────────────────
+    curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb \
+      -o /tmp/cloudflared.deb
+    dpkg -i /tmp/cloudflared.deb
+
+    # ── Clone + build app ─────────────────────────────────────────────────────
     git clone https://github.com/${var.github_repo}.git /opt/hq
     cd /opt/hq
+
+    # Write client production env BEFORE building (baked in by Vite at build time)
+    printf 'VITE_SERVER_URL=https://${local.hostname}\n' \
+      > /opt/hq/app/client/.env.production
+
+    # Write server runtime env
+    cat > /opt/hq/app/server/.env <<DOTENV
+PORT=4000
+MONGODB_URI=mongodb://localhost:27017/heroquest
+CLIENT_URL=https://${local.hostname}
+DOTENV
+
     npm install
-    npm run build --workspace=@hq/shared
-    npm run build --workspace=@hq/server
+    npm run build
 
-    printf 'PORT=4000\nMONGODB_URI=mongodb://localhost:27017/heroquest\nCLIENT_URL=https://hqv2.${var.cf_zone_name}\n' \
-      > /opt/hq/app/server/.env
+    # ── systemd service for the Node.js app ───────────────────────────────────
+    cat > /etc/systemd/system/hq-server.service <<SVCEOF
+[Unit]
+Description=HQ Companion Server
+After=network.target mongod.service
+Wants=mongod.service
 
-    # ── Systemd service ─────────────────────────────────────────────────────
-    cat > /etc/systemd/system/hq-server.service <<'SERVICE'
-    [Unit]
-    Description=HQ Companion Server
-    After=network.target mongod.service
-    Wants=mongod.service
+[Service]
+Type=simple
+WorkingDirectory=/opt/hq
+ExecStart=/usr/bin/node app/server/dist/index.js
+Restart=always
+RestartSec=5
+EnvironmentFile=/opt/hq/app/server/.env
 
-    [Service]
-    Type=simple
-    WorkingDirectory=/opt/hq/app/server
-    ExecStart=/usr/bin/node dist/index.js
-    Restart=always
-    RestartSec=5
-    Environment=NODE_ENV=production
+[Install]
+WantedBy=multi-user.target
+SVCEOF
 
-    [Install]
-    WantedBy=multi-user.target
-    SERVICE
     systemctl daemon-reload
-    systemctl enable hq-server
-    systemctl start hq-server
+    systemctl enable --now hq-server
 
-    # ── nginx ────────────────────────────────────────────────────────────────
-    yum install -y nginx
-    sed -i 's/ default_server//g' /etc/nginx/nginx.conf
-    cat > /etc/nginx/conf.d/hq.conf <<'NGINX'
-    server {
-      listen 80 default_server;
-      location / {
-        proxy_pass         http://localhost:4000;
-        proxy_http_version 1.1;
-        proxy_set_header   Upgrade $http_upgrade;
-        proxy_set_header   Connection "upgrade";
-        proxy_set_header   Host $host;
-        proxy_set_header   X-Real-IP $remote_addr;
-      }
-    }
-    NGINX
-    systemctl enable nginx
-    systemctl start nginx
-  EOF
+    # ── Cloudflare Tunnel ─────────────────────────────────────────────────────
+    # 'cloudflared service install <TOKEN>' installs cloudflared as a systemd
+    # service. It reads ingress config from the Cloudflare API (managed by
+    # cloudflare_tunnel_config in cloudflare.tf) — no local config.yml needed.
+    cloudflared service install ${cloudflare_tunnel.hq.tunnel_token}
+    systemctl enable --now cloudflared
+  USERDATA
+
+  # Tunnel token is known only after cloudflare_tunnel is created,
+  # so Terraform will create the tunnel before this instance.
+  depends_on = [cloudflare_tunnel.hq]
 
   tags = merge(local.tags, {
     Name = "hq-dev"
   })
 }
 
-# Elastic IP so the DNS A record never needs updating after stop/start
+# ── Elastic IP (stable address for SSH; tunnel doesn't need a static IP) ─────
+
 resource "aws_eip" "dev" {
   instance = aws_instance.dev.id
   domain   = "vpc"

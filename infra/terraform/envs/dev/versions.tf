@@ -10,8 +10,8 @@ terraform {
       source  = "cloudflare/cloudflare"
       version = "~> 4.0"
     }
-    null = {
-      source  = "hashicorp/null"
+    random = {
+      source  = "hashicorp/random"
       version = "~> 3.0"
     }
     archive = {
