@@ -132,11 +132,11 @@ resource "aws_instance" "dev" {
     git clone https://github.com/${var.github_repo}.git /opt/hq
     cd /opt/hq
     npm install
-    npm run build --workspace=shared
-    npm run build --workspace=server
+    npm run build --workspace=@hq/shared
+    npm run build --workspace=@hq/server
 
     printf 'PORT=4000\nMONGODB_URI=mongodb://localhost:27017/heroquest\nCLIENT_URL=https://hqv2.${var.cf_zone_name}\n' \
-      > /opt/hq/server/.env
+      > /opt/hq/app/server/.env
 
     # ── Systemd service ─────────────────────────────────────────────────────
     cat > /etc/systemd/system/hq-server.service <<'SERVICE'
@@ -147,7 +147,7 @@ resource "aws_instance" "dev" {
 
     [Service]
     Type=simple
-    WorkingDirectory=/opt/hq/server
+    WorkingDirectory=/opt/hq/app/server
     ExecStart=/usr/bin/node dist/index.js
     Restart=always
     RestartSec=5

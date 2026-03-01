@@ -3,6 +3,7 @@ dist/
 .env
 *.env.local
 .env.production
+SESSION_CONTEXT.md
 .DS_Store
 
 # Terraform

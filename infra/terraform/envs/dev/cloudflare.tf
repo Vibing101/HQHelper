@@ -48,7 +48,7 @@ resource "null_resource" "deploy_frontend" {
 
   provisioner "local-exec" {
     working_dir = "${path.root}/../../../../"
-    command     = "npm run build && npx wrangler pages deploy client/dist --project-name=${var.cf_pages_project_name} --branch=main"
+    command     = "npm run build && npx wrangler pages deploy app/client/dist --project-name=${var.cf_pages_project_name} --branch=main"
     environment = {
       VITE_SERVER_URL = "https://api.hqv2.${var.cf_zone_name}"
       VITE_WAKE_URL   = aws_lambda_function_url.wake.function_url
