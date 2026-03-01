@@ -1,0 +1,18 @@
+# AI Developer Instructions
+
+Before implementing any features, read:
+
+1. docs/architecture/V6_MIGRATION_PLAN.md
+2. docs/architecture/GEAR_RULES_AND_CATALOG_AUDIT.md
+3. docs/architecture/EXPANSION_PLUGIN_ARCHITECTURE.md
+4. docs/architecture/DREAD_MOON_V6_IMPLEMENTATION.md
+
+Implementation priority:
+
+1. Combat dice engine
+2. Equipment legality rules
+3. Socket command mutation pipeline
+4. Expansion plugin system
+5. Dread Moon mechanics
+
+Do not modify legacy V5 systems without following the migration plan.
