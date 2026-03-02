@@ -666,7 +666,13 @@ export function canEquipItem(
 
   // Wizard cannot wear armor or use two-handed (large) weapons
   if (hero.heroTypeId === "wizard") {
-    if (slot === "armorBody" || slot === "armorHead") {
+    const isArmorItem =
+      item.category === "armor" ||
+      !!item.armorTags?.length ||
+      slot === "armorBody" ||
+      slot === "armorHead" ||
+      (slot === "weaponOff" && item.armorTags?.includes("shield"));
+    if (isArmorItem) {
       return { ok: false, reason: "Wizard cannot wear armor" };
     }
     if (item.weaponTags?.includes("twoHanded")) {
@@ -698,9 +704,17 @@ export function canEquipItem(
 
   // Disguise restrictions (Dread Moon)
   if (hero.statusFlags.isDisguised && rules.enabledSystems.disguises) {
-    if (slot === "weaponMain" || slot === "weaponOff") {
+    if (slot === "weaponMain") {
       if (!item.weaponTags?.includes("disguiseLegal")) {
         return { ok: false, reason: "Cannot equip this weapon while disguised" };
+      }
+    }
+    if (slot === "weaponOff") {
+      if (item.armorTags?.includes("shield")) {
+        return { ok: false, reason: "Cannot equip a shield while disguised" };
+      }
+      if (!item.weaponTags?.includes("disguiseLegal")) {
+        return { ok: false, reason: "Cannot equip this offhand item while disguised" };
       }
     }
     if (slot === "armorBody") {
