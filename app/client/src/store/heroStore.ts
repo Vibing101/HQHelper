@@ -22,6 +22,11 @@ export const useHeroStore = create<HeroState>((set) => ({
     })),
   applyStateUpdate: (update) =>
     set((state) => {
+      if (update.type === "SYNC_SNAPSHOT" && update.snapshot) {
+        const allHeroes = update.snapshot.heroes ?? [];
+        const myHero = state.myHero ? allHeroes.find((h: Hero) => h.id === state.myHero!.id) ?? state.myHero : state.myHero;
+        return { myHero, allHeroes };
+      }
       if (update.type === "HERO_UPDATED") {
         return {
           myHero: state.myHero?.id === update.hero.id ? update.hero : state.myHero,

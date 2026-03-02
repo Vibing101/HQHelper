@@ -121,6 +121,14 @@ export default function PlayerSheet() {
 
   useEffect(() => {
     const unsub = onStateUpdate((update) => {
+      if (update.type === "SYNC_SNAPSHOT" && update.snapshot) {
+        const snapHero = (update.snapshot.heroes ?? []).find((h: Hero) => h.id === heroId);
+        if (snapHero) setHero(snapHero);
+        if (update.snapshot.party) setParty(update.snapshot.party);
+        if (update.snapshot.session?.rulesSnapshot) setSessionRules(update.snapshot.session.rulesSnapshot);
+        setPartyHeroes(update.snapshot.heroes ?? []);
+        return;
+      }
       if (update.type === "HERO_UPDATED" && update.hero.id === heroId) {
         setHero(update.hero);
         fetchPartyData();
@@ -232,6 +240,9 @@ export default function PlayerSheet() {
             <p className="text-xs text-parchment/50 capitalize">{hero.heroTypeId}</p>
           </div>
           <div className="text-right text-xs text-parchment/60 space-y-0.5">
+            <button className="btn-secondary text-xs px-2 py-1 mb-1" onClick={() => sendCommand({ type: "REQUEST_SNAPSHOT" })}>
+              Resync
+            </button>
             <p>💰 Mine: {hero.gold}{partyGold !== null && <span className="text-parchment/40"> | Party: {partyGold}</span>}</p>
             <p>⚔️ {effectiveAttack}🎲 ATK{effectiveAttack !== hero.attackDice && <span className="text-hq-amber"> (+{effectiveAttack - hero.attackDice})</span>}</p>
             <p>🛡️ {effectiveDefend}🎲 DEF{effectiveDefend !== hero.defendDice && <span className="text-hq-amber"> (+{effectiveDefend - hero.defendDice})</span>}</p>

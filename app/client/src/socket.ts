@@ -33,6 +33,7 @@ export function getSocket(): Socket {
     socket.on("reconnect", () => {
       if (lastJoinParams) {
         socket!.emit("join", { sessionId: lastJoinParams.sessionId });
+        socket!.emit("command", { type: "REQUEST_SNAPSHOT", sessionId: lastJoinParams.sessionId });
       }
     });
   }
@@ -46,7 +47,10 @@ export function joinSession(params: JoinParams): Promise<void> {
     s.connect();
     // Only pass sessionId to the server — identity comes from the JWT
     s.emit("join", { sessionId: params.sessionId });
-    s.once("joined", () => resolve());
+    s.once("joined", () => {
+      s.emit("command", { type: "REQUEST_SNAPSHOT", sessionId: params.sessionId });
+      resolve();
+    });
     s.once("connect_error", (err) => reject(err));
   });
 }

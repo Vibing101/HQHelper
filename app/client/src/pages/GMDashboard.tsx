@@ -109,6 +109,13 @@ export default function GMDashboard() {
     if (!campaignId || !serverReady) return;
     joinSession({ campaignId, role: "gm" });
     const unsub = onStateUpdate((update) => {
+      if (update.type === "SYNC_SNAPSHOT" && update.snapshot) {
+        setCampaign(update.snapshot.campaign);
+        setParty(update.snapshot.party);
+        setHeroes(update.snapshot.heroes ?? []);
+        setSession(update.snapshot.session ?? null);
+        return;
+      }
       if (update.type === "SESSION_UPDATED") setSession(update.session);
       if (update.type === "HERO_UPDATED") {
         setHeroes((prev) => prev.map((h) => (h.id === update.hero.id ? update.hero : h)));
@@ -273,6 +280,9 @@ export default function GMDashboard() {
       {/* Header */}
       <header className="bg-hq-brown border-b border-hq-amber/30 px-4 py-3 flex items-center gap-3">
         <h1 className="text-xl font-display text-hq-amber flex-1">{campaign.name}</h1>
+        <button className="btn-secondary text-xs px-2 py-1" onClick={() => sendCommand({ type: "REQUEST_SNAPSHOT", sessionId: session?.id })}>
+          Resync
+        </button>
         <span className="badge-gm">GM</span>
         <div className="text-right">
           <p className="text-xs text-parchment/50">Join Code</p>

@@ -13,6 +13,8 @@ import heroRoutes from "./routes/heroes";
 import partyRoutes from "./routes/parties";
 import { registerSocketHandlers } from "./socket/handlers";
 import { verifyToken } from "./auth";
+import { CampaignModel } from "./models/Campaign";
+import { buildSnapshotForSocket } from "./socket/snapshot";
 
 const PORT = Number(process.env.PORT ?? 4000);
 const MONGODB_URI = process.env.MONGODB_URI ?? "mongodb://localhost:27017/heroquest";
@@ -86,16 +88,29 @@ io.on("connection", (socket) => {
   // Client sends join event: { sessionId? }
   // Identity (campaignId, role, playerId, heroId) comes exclusively from the
   // verified JWT populated above — never from client-supplied join data.
-  socket.on("join", (data: { sessionId?: string; [key: string]: unknown }) => {
+  socket.on("join", async (data: { sessionId?: string; [key: string]: unknown }) => {
     socket.join(`campaign:${socket.data.campaignId}`);
-    if (data.sessionId) {
-      socket.join(`session:${data.sessionId}`);
-      socket.data.sessionId = data.sessionId;
+    const previousSessionId = socket.data.sessionId as string | undefined;
+    if (previousSessionId && data.sessionId && previousSessionId !== data.sessionId) {
+      socket.leave(`session:${previousSessionId}`);
+    }
+
+    let sessionIdToJoin = data.sessionId;
+    if (!sessionIdToJoin) {
+      const campaign = await CampaignModel.findById(socket.data.campaignId as string);
+      sessionIdToJoin = campaign?.currentSessionId;
+    }
+
+    if (sessionIdToJoin) {
+      socket.join(`session:${sessionIdToJoin}`);
+      socket.data.sessionId = sessionIdToJoin;
     }
     console.log(
       `[socket] ${socket.id} joined campaign:${socket.data.campaignId} as ${socket.data.role}`
     );
     socket.emit("joined", { ok: true });
+    const snapshot = await buildSnapshotForSocket(socket, sessionIdToJoin);
+    socket.emit("state_update", { type: "SYNC_SNAPSHOT", snapshot });
   });
 
   registerSocketHandlers(io, socket);

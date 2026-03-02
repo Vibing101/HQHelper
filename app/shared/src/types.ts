@@ -414,6 +414,11 @@ export type SetQuestStatusCommand = {
   status: "locked" | "available" | "completed";
 };
 
+export type RequestSnapshotCommand = {
+  type: "REQUEST_SNAPSHOT";
+  sessionId?: string;
+};
+
 export type SetHeroDisguiseCommand = {
   type: "SET_HERO_DISGUISE";
   heroId: string;
@@ -508,6 +513,7 @@ export type SocketCommand =
   | StartSessionCommand
   | EndSessionCommand
   | SetQuestStatusCommand
+  | RequestSnapshotCommand
   | SetHeroDisguiseCommand
   | AdjustReputationCommand
   | UnlockMercenaryTypeCommand
@@ -521,6 +527,14 @@ export type SocketCommand =
   | SetMonsterStatusCommand
   | BuyUndergroundItemCommand
   | UseHideoutRestCommand;
+
+export type StateSnapshot = {
+  campaign: Campaign | null;
+  party: Party | null;
+  heroes: Hero[];
+  session: Session | null;
+  requestedAt: string;
+};
 
 // ─── Hero Base Stats ──────────────────────────────────────────────────────────
 

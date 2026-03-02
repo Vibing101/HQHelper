@@ -55,6 +55,9 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   applyStateUpdate: (update) =>
     set((state) => {
+      if (update.type === "SYNC_SNAPSHOT" && update.snapshot) {
+        return { session: update.snapshot.session ?? null };
+      }
       if (update.type === "SESSION_UPDATED" && update.session) {
         return { session: update.session };
       }

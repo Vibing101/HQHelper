@@ -9,6 +9,7 @@ import { MONSTER_TYPES, QUESTS, GEAR_CATALOG, ITEM_CATALOG, HERO_SPELL_ACCESS, A
 import type { PackId } from "@hq/shared";
 import { docToJson } from "../utils/docToJson";
 import { ensureHeroStateShape } from "../utils/heroState";
+import { buildSnapshotForSocket } from "./snapshot";
 
 const nanoidEquip = customAlphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
 
@@ -77,6 +78,9 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
         case "SET_QUEST_STATUS":
           await handleSetQuestStatus(io, socket, cmd);
           break;
+        case "REQUEST_SNAPSHOT":
+          await handleRequestSnapshot(socket, cmd);
+          break;
         case "SET_HERO_DISGUISE":
           await handleSetHeroDisguise(io, socket, cmd);
           break;
@@ -124,6 +128,11 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
       socket.emit("error", { message: "Command failed" });
     }
   });
+}
+
+async function handleRequestSnapshot(socket: Socket, cmd: Extract<SocketCommand, { type: "REQUEST_SNAPSHOT" }>) {
+  const snapshot = await buildSnapshotForSocket(socket, cmd.sessionId);
+  socket.emit("state_update", { type: "SYNC_SNAPSHOT", snapshot });
 }
 
 async function getSessionRules(campaignId: string, socketSessionId?: string): Promise<EffectiveRules | null> {
