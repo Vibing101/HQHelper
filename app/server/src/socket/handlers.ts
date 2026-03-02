@@ -352,8 +352,7 @@ async function handleEquipItem(io: Server, socket: Socket, cmd: Extract<SocketCo
   const campaign = await CampaignModel.findById(hero.campaignId);
   if (!campaign) return socket.emit("error", { message: "Campaign not found" });
 
-  const packId = (campaign.enabledPacks[campaign.enabledPacks.length - 1] ?? "BASE") as PackId;
-  const rules = resolveEffectiveRules(packId);
+  const rules = resolveEffectiveRules(campaign.enabledPacks as PackId[]);
 
   const heroPlain = docToJson(hero) as import("@hq/shared").Hero;
   const result = canEquipItem(heroPlain, item, rules);
@@ -429,7 +428,7 @@ async function handleStartSession(io: Server, socket: Socket, cmd: Extract<Socke
   const pack = campaign.enabledPacks.find((p) => p === quest.packId) as PackId | undefined;
   if (!pack) return socket.emit("error", { message: `Pack ${quest.packId} not enabled for this campaign` });
 
-  const rulesSnapshot = resolveEffectiveRules(quest.packId, quest);
+  const rulesSnapshot = resolveEffectiveRules(campaign.enabledPacks as PackId[], quest);
 
   const session = await SessionModel.create({
     campaignId,

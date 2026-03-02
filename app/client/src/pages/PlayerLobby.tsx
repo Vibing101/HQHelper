@@ -72,7 +72,7 @@ export default function PlayerLobby() {
     const availableQuestId = campaign.questLog.find((q) => q.status === "available")?.questId;
     const quest = availableQuestId ? QUESTS.find((q) => q.id === availableQuestId) : undefined;
     if (quest) {
-      return resolveEffectiveRules(quest.packId, quest).allowedHeroes;
+      return resolveEffectiveRules(campaign.enabledPacks, quest).allowedHeroes;
     }
     // Fallback: union of all pack allowed heroes
     const allHeroes = new Set<HeroTypeId>();

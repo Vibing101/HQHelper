@@ -287,7 +287,7 @@ export default function GMDashboard() {
                   {(() => {
                     const quest = QUESTS.find((q) => q.id === selectedQuestId);
                     if (!quest) return null;
-                    const rules = resolveEffectiveRules(quest.packId, quest);
+                    const rules = resolveEffectiveRules(campaign?.enabledPacks ?? [quest.packId], quest);
                     return (
                       <p className="text-xs text-parchment/50 mt-1">
                         Allowed heroes: {rules.allowedHeroes.join(", ")}

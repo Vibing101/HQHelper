@@ -77,22 +77,40 @@ export type Quest = {
 // ─── Effective Rules ──────────────────────────────────────────────────────────
 
 export type EffectiveRules = {
-  packId: PackId;
+  packIds: PackId[];
   allowedHeroes: HeroTypeId[];
   enabledSystems: Record<EnabledSystem, boolean>;
   constraints: Required<NonNullable<PackDefinition["constraints"]>>;
 };
 
-export function resolveEffectiveRules(packId: PackId, quest?: Quest): EffectiveRules {
-  const pack = PACKS[packId];
+const SYSTEM_KEYS: EnabledSystem[] = [
+  "reputationTokens",
+  "disguises",
+  "mercenaries",
+  "alchemy",
+  "mindShock",
+];
 
-  let allowedHeroes = [...pack.allowedHeroes];
-  let enabledSystems = { ...pack.enabledSystems };
+export function resolveEffectiveRules(enabledPacks: PackId[], quest?: Quest): EffectiveRules {
+  const packs = enabledPacks.map((id) => PACKS[id]);
+
+  // Union of all allowedHeroes across enabled packs
+  let allowedHeroes: HeroTypeId[] = Array.from(
+    new Set(packs.flatMap((p) => p.allowedHeroes)),
+  );
+
+  // OR-merge enabledSystems: any pack that enables a system enables it globally
+  let enabledSystems = Object.fromEntries(
+    SYSTEM_KEYS.map((key) => [key, packs.some((p) => p.enabledSystems[key])]),
+  ) as Record<EnabledSystem, boolean>;
+
+  // Most-permissive constraints: AND for uniqueHeroesOnly, MAX for maxPartySize
   const constraints = {
-    uniqueHeroesOnly: pack.constraints?.uniqueHeroesOnly ?? true,
-    maxPartySize: pack.constraints?.maxPartySize ?? 4,
+    uniqueHeroesOnly: packs.every((p) => p.constraints?.uniqueHeroesOnly ?? true),
+    maxPartySize: packs.length > 0 ? Math.max(...packs.map((p) => p.constraints?.maxPartySize ?? 4)) : 4,
   };
 
+  // Quest flag overrides applied on top of merged pack rules
   if (quest?.flags?.enabledSystems) {
     enabledSystems = { ...enabledSystems, ...quest.flags.enabledSystems };
   }
@@ -108,7 +126,7 @@ export function resolveEffectiveRules(packId: PackId, quest?: Quest): EffectiveR
 
   allowedHeroes = Array.from(new Set(allowedHeroes));
 
-  return { packId, allowedHeroes, enabledSystems, constraints };
+  return { packIds: enabledPacks, allowedHeroes, enabledSystems, constraints };
 }
 
 // ─── Campaign ─────────────────────────────────────────────────────────────────
