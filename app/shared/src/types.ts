@@ -194,14 +194,31 @@ export type ItemDefinition = {
 
 export type EquippedItem = { instanceId: string; itemId: string };
 
-// ─── Hero ─────────────────────────────────────────────────────────────────────
+export type InventoryItem = { instanceId: string; itemId: string };
 
-export type Item = {
-  id: string;
-  name: string;
+export type ConsumableItem = {
+  instanceId: string;
+  itemId: string;
   quantity: number;
+  usesRemaining?: number;
+  // Legacy/custom support: existing records may still carry these fields.
+  name?: string;
   effect?: string;
 };
+
+// An artifact is an ItemDefinition that can only be obtained via quest rewards.
+export type ArtifactDefinition = ItemDefinition & {
+  /** Quest IDs from which this artifact can be awarded. */
+  sourceQuestIds: string[];
+};
+
+// Tracks an artifact instance in a hero's possession.
+export type ArtifactInstance = {
+  instanceId: string;
+  artifactId: string;
+};
+
+// ─── Hero ─────────────────────────────────────────────────────────────────────
 
 export type Hero = {
   id: string;
@@ -220,7 +237,9 @@ export type Hero = {
 
   gold: number;
   equipped: Partial<Record<EquipSlot, EquippedItem>>;
-  consumables: Item[];
+  inventory: InventoryItem[];
+  consumables: ConsumableItem[];
+  artifacts: ArtifactInstance[];
   spellsChosenThisQuest: string[];
 
   statusFlags: {
@@ -413,42 +432,6 @@ export const MONSTER_TYPES: MonsterType[] = [
   { id: "witch_lord",   name: "Witch Lord",   bodyPointsMax: 6, mindPointsCurrent: 6, attackDice: 4, defendDice: 6, movement: 6 },
 ];
 
-// ─── Gear Catalog ─────────────────────────────────────────────────────────────
-
-export type GearCategory = "weapon" | "armor" | "consumable" | "magic";
-
-export type GearItem = {
-  id: string;
-  name: string;
-  category: GearCategory;
-  attackBonus?: number;
-  defendBonus?: number;
-  description: string;
-  goldCost: number;
-};
-
-export const GEAR_CATALOG: GearItem[] = [
-  // Weapons
-  { id: "short_sword",  name: "Short Sword",         category: "weapon",    attackBonus: 1,               description: "+1 Attack die",              goldCost: 150 },
-  { id: "hand_axe",     name: "Hand Axe",             category: "weapon",    attackBonus: 1,               description: "+1 Attack die",              goldCost: 200 },
-  { id: "spear",        name: "Spear",                category: "weapon",    attackBonus: 1,               description: "+1 Attack die",              goldCost: 200 },
-  { id: "broadsword",   name: "Broadsword",           category: "weapon",    attackBonus: 2,               description: "+2 Attack dice",             goldCost: 350 },
-  { id: "battle_axe",   name: "Battle Axe",           category: "weapon",    attackBonus: 2,               description: "+2 Attack dice",             goldCost: 250 },
-  { id: "crossbow",     name: "Crossbow",             category: "weapon",    attackBonus: 2,               description: "+2 Attack dice, ranged",     goldCost: 300 },
-  { id: "magic_sword",  name: "Magic Sword",          category: "magic",     attackBonus: 2, defendBonus: 1, description: "+2 Attack, +1 Defense",   goldCost: 500 },
-  // Armor
-  { id: "helmet",       name: "Helmet",               category: "armor",                     defendBonus: 1, description: "+1 Defense die",          goldCost: 150 },
-  { id: "shield",       name: "Shield",               category: "armor",                     defendBonus: 1, description: "+1 Defense die",          goldCost: 150 },
-  { id: "cloak",        name: "Cloak of Protection",  category: "armor",                     defendBonus: 1, description: "+1 Defense die",          goldCost: 200 },
-  { id: "chain_mail",   name: "Chain Mail",           category: "armor",                     defendBonus: 2, description: "+2 Defense dice",         goldCost: 300 },
-  { id: "plate_armour", name: "Plate Armour",         category: "armor",                     defendBonus: 3, description: "+3 Defense dice",         goldCost: 450 },
-  // Consumables
-  { id: "healing_potion", name: "Healing Potion",     category: "consumable",                               description: "Restore 4 Body Points",    goldCost: 100 },
-  { id: "healing_herb",   name: "Healing Herb",       category: "consumable",                               description: "Restore 2 Body Points",    goldCost: 50  },
-  { id: "holy_water",     name: "Holy Water",         category: "consumable",                               description: "Auto-pass next Mind test", goldCost: 75  },
-  // Magic
-  { id: "talisman",     name: "Talisman of Lore",     category: "magic",                     defendBonus: 1, description: "+1 Defense, +2 Mind Points (spellcasters)", goldCost: 200 },
-];
 
 // ─── Spells (2021 Hasbro HeroQuest edition) ───────────────────────────────────
 
@@ -497,32 +480,15 @@ export const HERO_SPELL_ACCESS: Partial<Record<HeroTypeId, { elements: SpellElem
 
 export const ALL_SPELL_ELEMENTS: SpellElement[] = ["air", "earth", "fire", "water"];
 
-// ─── Item Catalog (V6 equipment model) ───────────────────────────────────────
+// ─── Item Catalog ─────────────────────────────────────────────────────────────
+// Combined lookup catalog: gear (armory, tools, consumables) + artifacts (quest rewards).
 
-export const ITEM_CATALOG: ItemDefinition[] = [
-  // Weapons — slot: weaponMain
-  { id: "short_sword",    name: "Short Sword",        category: "weapon",  equipSlot: "weaponMain", weaponTags: ["oneHanded", "disguiseLegal"], attackDiceBonus: 1, costGold: 150, description: "+1 Attack die" },
-  { id: "hand_axe",       name: "Hand Axe",           category: "weapon",  equipSlot: "weaponMain", weaponTags: ["oneHanded", "disguiseLegal"], attackDiceBonus: 1, costGold: 200, description: "+1 Attack die" },
-  { id: "spear",          name: "Spear",              category: "weapon",  equipSlot: "weaponMain", weaponTags: ["oneHanded", "disguiseLegal"], attackDiceBonus: 1, costGold: 200, description: "+1 Attack die" },
-  { id: "broadsword",     name: "Broadsword",         category: "weapon",  equipSlot: "weaponMain", weaponTags: ["twoHanded"],                  attackDiceBonus: 2, costGold: 350, description: "+2 Attack dice (two-handed)" },
-  { id: "battle_axe",     name: "Battle Axe",         category: "weapon",  equipSlot: "weaponMain", weaponTags: ["twoHanded"],                  attackDiceBonus: 2, costGold: 250, description: "+2 Attack dice (two-handed)" },
-  { id: "crossbow",       name: "Crossbow",           category: "weapon",  equipSlot: "weaponMain", weaponTags: ["ranged", "oneHanded"],        attackDiceBonus: 2, costGold: 300, description: "+2 Attack dice, ranged" },
-  // Off-hand — slot: weaponOff
-  { id: "shield",         name: "Shield",             category: "armor",   equipSlot: "weaponOff",  armorTags: ["shield"],                     defendDiceBonus: 1, costGold: 150, description: "+1 Defense die" },
-  // Head armor — slot: armorHead
-  { id: "helmet",         name: "Helmet",             category: "armor",   equipSlot: "armorHead",  armorTags: ["helmet"],                     defendDiceBonus: 1, costGold: 150, description: "+1 Defense die" },
-  // Body armor — slot: armorBody
-  { id: "chain_mail",     name: "Chain Mail",         category: "armor",   equipSlot: "armorBody",  armorTags: ["bodyArmor"],                  defendDiceBonus: 2, costGold: 300, description: "+2 Defense dice" },
-  { id: "plate_armour",   name: "Plate Armour",       category: "armor",   equipSlot: "armorBody",  armorTags: ["bodyArmor"],                  defendDiceBonus: 3, costGold: 450, description: "+3 Defense dice" },
-  // Artifacts — no equip slot
-  { id: "cloak",          name: "Cloak of Protection", category: "artifact", armorTags: ["cloakNotArmor"],                                     defendDiceBonus: 1, costGold: 200, description: "+1 Defense die (not armor)" },
-  { id: "magic_sword",    name: "Magic Sword",        category: "artifact",                                                                    attackDiceBonus: 2, defendDiceBonus: 1, costGold: 500, description: "+2 Attack, +1 Defense" },
-  { id: "talisman",       name: "Talisman of Lore",   category: "artifact",                                                                    defendDiceBonus: 1, mindPointBonus: 2,  costGold: 200, description: "+1 Defense, +2 Mind Points" },
-  // Consumables — no slot
-  { id: "healing_potion", name: "Healing Potion",     category: "consumable", costGold: 100, description: "Restore 4 Body Points" },
-  { id: "healing_herb",   name: "Healing Herb",       category: "consumable", costGold: 50,  description: "Restore 2 Body Points" },
-  { id: "holy_water",     name: "Holy Water",         category: "consumable", costGold: 75,  description: "Auto-pass next Mind test" },
-];
+import { GEAR_CATALOG as _GEAR } from "./data/gear";
+import { ARTIFACT_CATALOG as _ARTIFACTS } from "./data/artifacts";
+
+export { _GEAR as GEAR_CATALOG, _ARTIFACTS as ARTIFACT_CATALOG };
+
+export const ITEM_CATALOG: ItemDefinition[] = [..._GEAR, ..._ARTIFACTS];
 
 // ─── Equipment Legality ───────────────────────────────────────────────────────
 

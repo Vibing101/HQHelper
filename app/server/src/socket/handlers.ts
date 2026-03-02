@@ -7,6 +7,7 @@ import type { SocketCommand, EffectiveRules } from "@hq/shared";
 import { MONSTER_TYPES, QUESTS, GEAR_CATALOG, ITEM_CATALOG, HERO_SPELL_ACCESS, ALL_SPELL_ELEMENTS, resolveEffectiveRules, canEquipItem } from "@hq/shared";
 import type { PackId } from "@hq/shared";
 import { docToJson } from "../utils/docToJson";
+import { ensureHeroStateShape } from "../utils/heroState";
 
 const nanoidEquip = customAlphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
 
@@ -78,6 +79,7 @@ async function handleAdjustPoints(io: Server, socket: Socket, cmd: Extract<Socke
   if (entityType === "hero") {
     const hero = await HeroModel.findById(entityId);
     if (!hero) return socket.emit("error", { message: "Hero not found" });
+    if (ensureHeroStateShape(hero)) await hero.save();
 
     // Authorization: GM can adjust any hero; players only their own
     if (socket.data.role !== "gm" && hero.playerId !== socket.data.playerId) {
@@ -144,6 +146,7 @@ async function handleSelectSpell(io: Server, socket: Socket, cmd: Extract<Socket
   const { heroId, spell, chosen } = cmd;
   const hero = await HeroModel.findById(heroId);
   if (!hero) return socket.emit("error", { message: "Hero not found" });
+  if (ensureHeroStateShape(hero)) await hero.save();
 
   // Authorization: GM or owning player
   if (socket.data.role !== "gm" && hero.playerId !== socket.data.playerId) {
@@ -235,16 +238,19 @@ async function handleUseItem(io: Server, socket: Socket, cmd: Extract<SocketComm
   const { heroId, itemId } = cmd;
   const hero = await HeroModel.findById(heroId);
   if (!hero) return socket.emit("error", { message: "Hero not found" });
+  if (ensureHeroStateShape(hero)) await hero.save();
 
   // Authorization: GM or owning player
   if (socket.data.role !== "gm" && hero.playerId !== socket.data.playerId) {
     return socket.emit("error", { message: "Not authorized to use items for this hero" });
   }
 
-  const itemIdx = hero.consumables.findIndex((i: any) => i.id === itemId);
-  if (itemIdx === -1) return socket.emit("error", { message: "Item not found" });
+  const itemIdx = hero.consumables.findIndex((i: any) => i.instanceId === itemId || i.id === itemId);
+  if (itemIdx === -1) return socket.emit("error", { message: "Consumable not found in hero inventory" });
 
   const item = hero.consumables[itemIdx] as any;
+  const catalogItem = ITEM_CATALOG.find((g) => g.id === item.itemId);
+
   if (item.quantity <= 1) {
     hero.consumables.splice(itemIdx, 1);
   } else {
@@ -252,7 +258,6 @@ async function handleUseItem(io: Server, socket: Socket, cmd: Extract<SocketComm
   }
 
   // Apply the consumable's effect
-  const catalogItem = GEAR_CATALOG.find((g) => g.name === item.name);
   if (catalogItem) {
     if (catalogItem.id === "healing_potion") {
       hero.bodyPointsCurrent = Math.min(hero.bodyPointsMax, hero.bodyPointsCurrent + 4);
@@ -321,6 +326,7 @@ async function handleAddGold(io: Server, socket: Socket, cmd: Extract<SocketComm
   const { heroId, amount } = cmd;
   const hero = await HeroModel.findById(heroId);
   if (!hero) return socket.emit("error", { message: "Hero not found" });
+  if (ensureHeroStateShape(hero)) await hero.save();
 
   if (hero.campaignId !== socket.data.campaignId) {
     return socket.emit("error", { message: "Forbidden: hero is not in your campaign" });
@@ -341,9 +347,14 @@ async function handleEquipItem(io: Server, socket: Socket, cmd: Extract<SocketCo
 
   const item = ITEM_CATALOG.find((i) => i.id === itemId);
   if (!item) return socket.emit("error", { message: `Unknown item: ${itemId}` });
+  if (!item.equipSlot) return socket.emit("error", { message: "This item cannot be equipped" });
+  if (item.equipSlot !== slot) {
+    return socket.emit("error", { message: `Illegal slot: ${item.name} must be equipped in ${item.equipSlot}` });
+  }
 
   const hero = await HeroModel.findById(heroId);
   if (!hero) return socket.emit("error", { message: "Hero not found" });
+  if (ensureHeroStateShape(hero)) await hero.save();
 
   if (hero.campaignId !== socket.data.campaignId) {
     return socket.emit("error", { message: "Forbidden: hero is not in your campaign" });
@@ -358,9 +369,43 @@ async function handleEquipItem(io: Server, socket: Socket, cmd: Extract<SocketCo
   const result = canEquipItem(heroPlain, item, rules);
   if (!result.ok) return socket.emit("error", { message: result.reason });
 
-  (hero as any).equipped = (hero as any).equipped ?? {};
-  (hero as any).equipped[slot] = { instanceId: nanoidEquip(), itemId };
+  const equipped = (hero as any).equipped ?? {};
+  const currentlyEquipped = equipped[slot];
+  if (currentlyEquipped?.itemId) {
+    const currentDef = ITEM_CATALOG.find((i) => i.id === currentlyEquipped.itemId);
+    if (currentDef?.category === "artifact") {
+      const hasArtifact = ((hero as any).artifacts ?? []).some((a: any) => a.artifactId === currentlyEquipped.itemId);
+      if (!hasArtifact) {
+        ((hero as any).artifacts ??= []).push({ instanceId: nanoidEquip(), artifactId: currentlyEquipped.itemId });
+      }
+    } else {
+      ((hero as any).inventory ??= []).push({ instanceId: nanoidEquip(), itemId: currentlyEquipped.itemId });
+    }
+  }
+
+  let instanceId = nanoidEquip();
+  if (item.category === "artifact") {
+    const artifacts = ((hero as any).artifacts ??= []);
+    const owned = artifacts.find((a: any) => a.artifactId === item.id);
+    if (!owned) {
+      artifacts.push({ instanceId, artifactId: item.id });
+    } else {
+      instanceId = owned.instanceId;
+    }
+  } else {
+    const inventory = ((hero as any).inventory ??= []);
+    const idx = inventory.findIndex((inv: any) => inv.itemId === item.id);
+    if (idx !== -1) {
+      instanceId = inventory[idx].instanceId;
+      inventory.splice(idx, 1);
+    }
+  }
+
+  (hero as any).equipped = equipped;
+  (hero as any).equipped[slot] = { instanceId, itemId };
   hero.markModified("equipped");
+  hero.markModified("inventory");
+  hero.markModified("artifacts");
   await hero.save();
 
   io.to(`campaign:${hero.campaignId}`).emit("state_update", { type: "HERO_UPDATED", hero: docToJson(hero) });
@@ -374,12 +419,21 @@ async function handleUnequipItem(io: Server, socket: Socket, cmd: Extract<Socket
   const { heroId, slot } = cmd;
   const hero = await HeroModel.findById(heroId);
   if (!hero) return socket.emit("error", { message: "Hero not found" });
+  if (ensureHeroStateShape(hero)) await hero.save();
 
   if (hero.campaignId !== socket.data.campaignId) {
     return socket.emit("error", { message: "Forbidden: hero is not in your campaign" });
   }
 
   if ((hero as any).equipped) {
+    const equippedEntry = (hero as any).equipped[slot];
+    if (equippedEntry?.itemId) {
+      const def = ITEM_CATALOG.find((i) => i.id === equippedEntry.itemId);
+      if (def?.category !== "artifact") {
+        ((hero as any).inventory ??= []).push({ instanceId: equippedEntry.instanceId ?? nanoidEquip(), itemId: equippedEntry.itemId });
+        hero.markModified("inventory");
+      }
+    }
     delete (hero as any).equipped[slot];
     hero.markModified("equipped");
   }
@@ -396,12 +450,20 @@ async function handleAddConsumable(io: Server, socket: Socket, cmd: Extract<Sock
   const { heroId, name, quantity = 1, effect } = cmd;
   const hero = await HeroModel.findById(heroId);
   if (!hero) return socket.emit("error", { message: "Hero not found" });
+  if (ensureHeroStateShape(hero)) await hero.save();
 
   if (hero.campaignId !== socket.data.campaignId) {
     return socket.emit("error", { message: "Forbidden: hero is not in your campaign" });
   }
 
-  (hero.consumables as any).push({ id: nanoidEquip(), name, quantity, effect });
+  const catalogMatch = GEAR_CATALOG.find((g) => g.category === "consumable" && g.name === name);
+  (hero.consumables as any).push({
+    instanceId: nanoidEquip(),
+    itemId: catalogMatch?.id ?? "custom_consumable",
+    name,
+    quantity,
+    effect: effect ?? catalogMatch?.description,
+  });
   await hero.save();
 
   io.to(`campaign:${hero.campaignId}`).emit("state_update", { type: "HERO_UPDATED", hero: docToJson(hero) });

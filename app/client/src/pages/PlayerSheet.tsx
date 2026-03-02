@@ -4,7 +4,7 @@ import type { Hero } from "@hq/shared";
 import { ALL_SPELL_ELEMENTS, GEAR_CATALOG, ITEM_CATALOG, HERO_SPELL_ACCESS, SPELLS, rollCombatDice, countHitsForHeroAttack, countBlocksForHeroDefense } from "@hq/shared";
 import type { EquipSlot } from "@hq/shared";
 import type { SpellElement } from "@hq/shared";
-import { joinSession, onDiceRoll, onStateUpdate, sendCommand } from "../socket";
+import { joinSession, onDiceRoll, onError, onStateUpdate, sendCommand } from "../socket";
 import StatAdjuster from "../components/StatAdjuster";
 
 const HERO_ICONS: Record<string, string> = {
@@ -40,6 +40,7 @@ export default function PlayerSheet() {
   const [partyHeroes, setPartyHeroes] = useState<Hero[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [socketError, setSocketError] = useState("");
   const [tab, setTab] = useState<"stats" | "inventory" | "spells">("stats");
 
   // Gear equip state
@@ -101,6 +102,11 @@ export default function PlayerSheet() {
     });
     return unsub;
   }, [heroId]);
+
+  useEffect(() => {
+    const unsub = onError((err) => setSocketError(err.message));
+    return unsub;
+  }, []);
 
   useEffect(() => {
     const unsub = onDiceRoll((roll) => {
@@ -336,30 +342,72 @@ export default function PlayerSheet() {
             </div>
 
             <div className="card space-y-3">
+              <h2 className="text-sm font-bold text-hq-amber uppercase tracking-wider">Armory Inventory</h2>
+              {(hero.inventory ?? []).length === 0 ? (
+                <p className="text-parchment/40 text-sm">No unequipped armory items</p>
+              ) : (
+                <ul className="space-y-2">
+                  {(hero.inventory ?? []).map((entry) => {
+                    const def = ITEM_CATALOG.find((i) => i.id === entry.itemId);
+                    return (
+                      <li key={entry.instanceId} className="flex items-center gap-2 text-sm">
+                        <span className="text-parchment flex-1">{def?.name ?? entry.itemId}</span>
+                        <span className="text-parchment/40 text-xs uppercase">{def?.category ?? "item"}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            <div className="card space-y-3">
+              <h2 className="text-sm font-bold text-hq-amber uppercase tracking-wider">Artifacts</h2>
+              {(hero.artifacts ?? []).length === 0 ? (
+                <p className="text-parchment/40 text-sm">No artifacts</p>
+              ) : (
+                <ul className="space-y-2">
+                  {(hero.artifacts ?? []).map((entry) => {
+                    const def = ITEM_CATALOG.find((i) => i.id === entry.artifactId);
+                    return (
+                      <li key={entry.instanceId} className="flex items-center gap-2 text-sm">
+                        <span className="text-parchment flex-1">{def?.name ?? entry.artifactId}</span>
+                        <span className="text-parchment/40 text-xs">Quest reward</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            <div className="card space-y-3">
               <h2 className="text-sm font-bold text-hq-amber uppercase tracking-wider">Consumables</h2>
-              {hero.consumables.length === 0 ? (
+              {(hero.consumables ?? []).length === 0 ? (
                 <p className="text-parchment/40 text-sm">No consumables</p>
               ) : (
                 <ul className="space-y-2">
-                  {hero.consumables.map((item) => (
-                    <li key={item.id} className="flex items-center gap-2">
+                  {(hero.consumables ?? []).map((item) => {
+                    const def = ITEM_CATALOG.find((i) => i.id === item.itemId);
+                    const label = item.name ?? def?.name ?? item.itemId;
+                    const effectText = item.effect ?? def?.description;
+                    return (
+                    <li key={item.instanceId} className="flex items-center gap-2">
                       <span className="flex-1 text-sm text-parchment">
-                        {item.name}
+                        {label}
                         {item.quantity > 1 && (
                           <span className="text-parchment/50"> ×{item.quantity}</span>
                         )}
                       </span>
-                      {item.effect && (
-                        <span className="text-xs text-parchment/50">{item.effect}</span>
+                      {effectText && (
+                        <span className="text-xs text-parchment/50">{effectText}</span>
                       )}
                       <button
                         className="btn-secondary text-xs px-2 py-0.5"
-                        onClick={() => useItem(item.id)}
+                        onClick={() => useItem(item.instanceId)}
                       >
                         Use
                       </button>
                     </li>
-                  ))}
+                  )})}
                 </ul>
               )}
               {/* Add consumable from catalog */}
@@ -373,7 +421,7 @@ export default function PlayerSheet() {
                   >
                     {CONSUMABLE_GEAR.map((g) => (
                       <option key={g.id} value={g.id}>
-                        {g.name} — {g.description} ({g.goldCost}g)
+                        {g.name} — {g.description} ({g.costGold}g)
                       </option>
                     ))}
                   </select>
@@ -492,6 +540,11 @@ export default function PlayerSheet() {
       {diceToast && (
         <div className="fixed bottom-4 left-4 right-4 z-50 bg-hq-brown border border-hq-amber rounded-lg px-4 py-3 shadow-lg">
           <p className="text-sm text-parchment text-center">{diceToast}</p>
+        </div>
+      )}
+      {socketError && (
+        <div className="fixed bottom-20 left-4 right-4 z-50 bg-hq-red/20 border border-hq-red rounded-lg px-4 py-3 shadow-lg">
+          <p className="text-sm text-hq-red text-center">{socketError}</p>
         </div>
       )}
     </div>

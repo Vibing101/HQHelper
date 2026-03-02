@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { Server } from "socket.io";
 import { HeroModel } from "../models/Hero";
 import { PartyModel } from "../models/Party";
 import { HERO_BASE_STATS } from "@hq/shared";
@@ -6,6 +7,7 @@ import type { HeroTypeId } from "@hq/shared";
 import { docToJson } from "../utils/docToJson";
 import { signToken } from "../auth";
 import { requireToken } from "../middleware/requireToken";
+import { ensureHeroStateShape } from "../utils/heroState";
 
 const router = Router();
 
@@ -50,8 +52,10 @@ router.post("/", requireToken(["player"]), async (req, res) => {
       bodyPointsCurrent: stats.bodyPointsMax,
       mindPointsCurrent: stats.mindPointsMax,
       gold: 0,
-      equipment: [],
+      equipped: {},
+      inventory: [],
       consumables: [],
+      artifacts: [],
       spellsChosenThisQuest: [],
       statusFlags: { isDead: false, isInShock: false, isDisguised: false },
     });
@@ -90,6 +94,7 @@ router.post("/:id/claim", requireToken(["player"]), async (req, res) => {
 
     const hero = await HeroModel.findById(req.params.id);
     if (!hero) return res.status(404).json({ error: "Hero not found" });
+    if (ensureHeroStateShape(hero)) await hero.save();
 
     if (hero.campaignId !== campaignId) {
       return res.status(403).json({ error: "Forbidden: hero is not in your campaign" });
@@ -117,6 +122,9 @@ router.post("/:id/claim", requireToken(["player"]), async (req, res) => {
 router.get("/campaign/:campaignId", async (req, res) => {
   try {
     const heroes = await HeroModel.find({ campaignId: req.params.campaignId });
+    for (const hero of heroes) {
+      if (ensureHeroStateShape(hero)) await hero.save();
+    }
     return res.json({ heroes: heroes.map(docToJson) });
   } catch (err) {
     return res.status(500).json({ error: "Failed to list heroes" });
@@ -128,6 +136,7 @@ router.get("/:id", async (req, res) => {
   try {
     const hero = await HeroModel.findById(req.params.id);
     if (!hero) return res.status(404).json({ error: "Not found" });
+    if (ensureHeroStateShape(hero)) await hero.save();
     return res.json({ hero: docToJson(hero) });
   } catch (err) {
     return res.status(500).json({ error: "Failed to load hero" });

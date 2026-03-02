@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { GEAR_CATALOG, ITEM_CATALOG, QUESTS, MONSTER_TYPES, resolveEffectiveRules, countHitsForHeroAttack, countBlocksForHeroDefense } from "@hq/shared";
 import type { CombatDieFace, EquipSlot } from "@hq/shared";
 import type { Campaign, Hero, Session } from "@hq/shared";
-import { joinSession, onDiceRoll, onStateUpdate, sendCommand } from "../socket";
+import { joinSession, onDiceRoll, onError, onStateUpdate, sendCommand } from "../socket";
 
 const EQUIP_GEAR = ITEM_CATALOG.filter((g) => g.equipSlot !== undefined);
 const CONSUMABLE_GEAR = GEAR_CATALOG.filter((g) => g.category === "consumable");
@@ -25,6 +25,7 @@ export default function GMDashboard() {
   const [selectedQuestId, setSelectedQuestId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [socketError, setSocketError] = useState("");
   const [joinCode, setJoinCode] = useState("");
 
   // Monster spawn form
@@ -136,6 +137,11 @@ export default function GMDashboard() {
       if (toastTimer.current) clearTimeout(toastTimer.current);
       toastTimer.current = setTimeout(() => setDiceToast(null), 5000);
     });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    const unsub = onError((err) => setSocketError(err.message));
     return unsub;
   }, []);
 
@@ -416,14 +422,18 @@ export default function GMDashboard() {
                     {/* Consumables */}
                     <div>
                       <p className="text-xs text-parchment/60 mb-2 uppercase tracking-wider">Consumables</p>
-                      {managedHero.consumables.length > 0 && (
+                      {(managedHero.consumables ?? []).length > 0 && (
                         <ul className="space-y-1 mb-3">
-                          {managedHero.consumables.map((c) => (
-                            <li key={c.id} className="text-sm text-parchment">
-                              {c.name} ×{c.quantity}
-                              {c.effect ? <span className="text-parchment/50 ml-1">({c.effect})</span> : null}
+                          {(managedHero.consumables ?? []).map((c) => {
+                            const def = ITEM_CATALOG.find((i) => i.id === c.itemId);
+                            const label = c.name ?? def?.name ?? c.itemId;
+                            const effect = c.effect ?? def?.description;
+                            return (
+                            <li key={c.instanceId} className="text-sm text-parchment">
+                              {label} ×{c.quantity}
+                              {effect ? <span className="text-parchment/50 ml-1">({effect})</span> : null}
                             </li>
-                          ))}
+                          );})}
                         </ul>
                       )}
                       <div className="space-y-2">
@@ -533,6 +543,11 @@ export default function GMDashboard() {
       {diceToast && (
         <div className="fixed bottom-4 left-4 right-4 z-50 bg-hq-brown border border-hq-amber rounded-lg px-4 py-3 shadow-lg">
           <p className="text-sm text-parchment text-center">{diceToast}</p>
+        </div>
+      )}
+      {socketError && (
+        <div className="fixed bottom-20 left-4 right-4 z-50 bg-hq-red/20 border border-hq-red rounded-lg px-4 py-3 shadow-lg">
+          <p className="text-sm text-hq-red text-center">{socketError}</p>
         </div>
       )}
     </div>

@@ -8,8 +8,25 @@ const EquippedItemSchema = new Schema(
   { _id: false }
 );
 
-const ItemSchema = new Schema(
-  { id: String, name: String, quantity: Number, effect: String },
+const InventoryItemSchema = new Schema(
+  { instanceId: String, itemId: String },
+  { _id: false }
+);
+
+const ConsumableItemSchema = new Schema(
+  {
+    instanceId: String,
+    itemId: String,
+    quantity: Number,
+    usesRemaining: Number,
+    name: String,
+    effect: String,
+  },
+  { _id: false }
+);
+
+const ArtifactInstanceSchema = new Schema(
+  { instanceId: String, artifactId: String },
   { _id: false }
 );
 
@@ -34,7 +51,9 @@ const HeroSchema = new Schema<HeroDoc>({
     armorBody:  { type: EquippedItemSchema },
     armorHead:  { type: EquippedItemSchema },
   },
-  consumables: [ItemSchema],
+  inventory: { type: [InventoryItemSchema], default: [] },
+  consumables: { type: [ConsumableItemSchema], default: [] },
+  artifacts: { type: [ArtifactInstanceSchema], default: [] },
   spellsChosenThisQuest: [String],
 
   statusFlags: {
