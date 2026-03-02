@@ -4,7 +4,6 @@ import { GEAR_CATALOG, QUESTS, MONSTER_TYPES, resolveEffectiveRules, countHitsFo
 import type { CombatDieFace } from "@hq/shared";
 import type { Campaign, Hero, Session } from "@hq/shared";
 import { joinSession, onDiceRoll, onStateUpdate, sendCommand } from "../socket";
-import { authFetch } from "../api";
 
 const EQUIP_GEAR = GEAR_CATALOG.filter((g) => g.category !== "consumable");
 const CONSUMABLE_GEAR = GEAR_CATALOG.filter((g) => g.category === "consumable");
@@ -110,6 +109,18 @@ export default function GMDashboard() {
       if (update.type === "HERO_CREATED") {
         setHeroes((prev) => [...prev, update.hero]);
       }
+      if (update.type === "SESSION_STARTED") {
+        setSession(update.session);
+        setCampaign(update.campaign);
+        setActiveTab("monsters");
+      }
+      if (update.type === "SESSION_ENDED") {
+        setSession(null);
+        setCampaign(update.campaign);
+      }
+      if (update.type === "CAMPAIGN_UPDATED") {
+        setCampaign(update.campaign);
+      }
     });
     return unsub;
   }, [campaignId]);
@@ -139,28 +150,14 @@ export default function GMDashboard() {
     }
   }, [campaignId, sessionId]);
 
-  async function startSession() {
-    if (!selectedQuestId || !campaignId) return;
-    const res = await authFetch(`/api/campaigns/${campaignId}/sessions`, {
-      method: "POST",
-      body: JSON.stringify({ questId: selectedQuestId }),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      setSession(data.session);
-      setActiveTab("monsters");
-    } else {
-      setError(data.error);
-    }
+  function startSession() {
+    if (!selectedQuestId) return;
+    sendCommand({ type: "START_SESSION", questId: selectedQuestId });
   }
 
-  async function endSession() {
+  function endSession() {
     if (!session) return;
-    const res = await authFetch(`/api/sessions/${session.id}/end`, { method: "PATCH" });
-    if (res.ok) {
-      setSession(null);
-      loadCampaign();
-    }
+    sendCommand({ type: "END_SESSION", sessionId: session.id });
   }
 
   function spawnMonster() {
@@ -179,107 +176,66 @@ export default function GMDashboard() {
     setSpawnLabel("");
   }
 
-  async function markQuestCompleted(questId: string) {
-    await authFetch(`/api/campaigns/${campaignId}/quest-log/${questId}`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: "completed" }),
-    });
-    loadCampaign();
+  function markQuestCompleted(questId: string) {
+    sendCommand({ type: "SET_QUEST_STATUS", questId, status: "completed" });
   }
 
-  async function unlockQuest(questId: string) {
-    await authFetch(`/api/campaigns/${campaignId}/quest-log/${questId}`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: "available" }),
-    });
-    loadCampaign();
+  function unlockQuest(questId: string) {
+    sendCommand({ type: "SET_QUEST_STATUS", questId, status: "available" });
   }
 
   // ─── Hero Management ──────────────────────────────────────────────────────────
 
-  function updateHeroInList(updated: Hero) {
-    setHeroes((prev) => prev.map((h) => (h.id === updated.id ? updated : h)));
-  }
-
-  async function awardGold() {
+  function awardGold() {
     if (!managedHeroId || !goldAmount) return;
-    const res = await authFetch(`/api/heroes/${managedHeroId}/gold`, {
-      method: "PATCH",
-      body: JSON.stringify({ amount: Number(goldAmount) }),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      updateHeroInList(data.hero);
-      setGoldAmount("");
-    }
+    sendCommand({ type: "ADD_GOLD", heroId: managedHeroId, amount: Number(goldAmount) });
+    setGoldAmount("");
   }
 
-  async function addEquipment() {
+  function addEquipment() {
     if (!managedHeroId || !newEquipName.trim()) return;
-    const res = await authFetch(`/api/heroes/${managedHeroId}/equipment`, {
-      method: "POST",
-      body: JSON.stringify({
-        name: newEquipName.trim(),
-        attackBonus: newEquipAtk ? Number(newEquipAtk) : undefined,
-        defendBonus: newEquipDef ? Number(newEquipDef) : undefined,
-      }),
+    sendCommand({
+      type: "EQUIP_ITEM",
+      heroId: managedHeroId,
+      name: newEquipName.trim(),
+      attackBonus: newEquipAtk ? Number(newEquipAtk) : undefined,
+      defendBonus: newEquipDef ? Number(newEquipDef) : undefined,
     });
-    const data = await res.json();
-    if (res.ok) {
-      updateHeroInList(data.hero);
-      setNewEquipName("");
-      setNewEquipAtk("");
-      setNewEquipDef("");
-    }
+    setNewEquipName("");
+    setNewEquipAtk("");
+    setNewEquipDef("");
   }
 
-  async function removeEquipment(heroId: string, equipId: string) {
-    const res = await authFetch(`/api/heroes/${heroId}/equipment/${equipId}`, { method: "DELETE" });
-    const data = await res.json();
-    if (res.ok) updateHeroInList(data.hero);
+  function removeEquipment(heroId: string, equipId: string) {
+    sendCommand({ type: "UNEQUIP_ITEM", heroId, equipId });
   }
 
-  async function addConsumable() {
+  function addConsumable() {
     if (!managedHeroId || !newConsumName.trim()) return;
-    const res = await authFetch(`/api/heroes/${managedHeroId}/consumables`, {
-      method: "POST",
-      body: JSON.stringify({
-        name: newConsumName.trim(),
-        quantity: Number(newConsumQty) || 1,
-        effect: newConsumEffect.trim() || undefined,
-      }),
+    sendCommand({
+      type: "ADD_CONSUMABLE",
+      heroId: managedHeroId,
+      name: newConsumName.trim(),
+      quantity: Number(newConsumQty) || 1,
+      effect: newConsumEffect.trim() || undefined,
     });
-    const data = await res.json();
-    if (res.ok) {
-      updateHeroInList(data.hero);
-      setNewConsumName("");
-      setNewConsumQty("1");
-      setNewConsumEffect("");
-    }
+    setNewConsumName("");
+    setNewConsumQty("1");
+    setNewConsumEffect("");
   }
 
-  async function equipFromCatalog() {
+  function equipFromCatalog() {
     if (!managedHeroId || !gmGearId) return;
     const item = EQUIP_GEAR.find((g) => g.id === gmGearId);
     if (!item) return;
-    const res = await authFetch(`/api/heroes/${managedHeroId}/equipment`, {
-      method: "POST",
-      body: JSON.stringify({ name: item.name, attackBonus: item.attackBonus, defendBonus: item.defendBonus }),
-    });
-    const data = await res.json();
-    if (res.ok) updateHeroInList(data.hero);
+    sendCommand({ type: "EQUIP_ITEM", heroId: managedHeroId, name: item.name, attackBonus: item.attackBonus, defendBonus: item.defendBonus });
   }
 
-  async function addConsumableFromCatalog() {
+  function addConsumableFromCatalog() {
     if (!managedHeroId || !gmConsumableId) return;
     const item = CONSUMABLE_GEAR.find((g) => g.id === gmConsumableId);
     if (!item) return;
-    const res = await authFetch(`/api/heroes/${managedHeroId}/consumables`, {
-      method: "POST",
-      body: JSON.stringify({ name: item.name, effect: item.description, quantity: 1 }),
-    });
-    const data = await res.json();
-    if (res.ok) updateHeroInList(data.hero);
+    sendCommand({ type: "ADD_CONSUMABLE", heroId: managedHeroId, name: item.name, effect: item.description, quantity: 1 });
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

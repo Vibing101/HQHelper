@@ -1,9 +1,14 @@
 import type { Server, Socket } from "socket.io";
+import { customAlphabet } from "nanoid";
 import { SessionModel } from "../models/Session";
 import { HeroModel } from "../models/Hero";
+import { CampaignModel } from "../models/Campaign";
 import type { SocketCommand, EffectiveRules } from "@hq/shared";
-import { MONSTER_TYPES, QUESTS, GEAR_CATALOG, HERO_SPELL_ACCESS, ALL_SPELL_ELEMENTS } from "@hq/shared";
+import { MONSTER_TYPES, QUESTS, GEAR_CATALOG, HERO_SPELL_ACCESS, ALL_SPELL_ELEMENTS, resolveEffectiveRules } from "@hq/shared";
+import type { PackId } from "@hq/shared";
 import { docToJson } from "../utils/docToJson";
+
+const nanoidEquip = customAlphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
 
 export function registerSocketHandlers(io: Server, socket: Socket) {
   socket.on("command", async (cmd: SocketCommand) => {
@@ -33,6 +38,27 @@ export function registerSocketHandlers(io: Server, socket: Socket) {
         case "ROLL_DICE":
           // Broadcast dice roll to all clients in the campaign (ephemeral — no DB save)
           io.to(`campaign:${socket.data.campaignId}`).emit("dice_roll", cmd);
+          break;
+        case "ADD_GOLD":
+          await handleAddGold(io, socket, cmd);
+          break;
+        case "EQUIP_ITEM":
+          await handleEquipItem(io, socket, cmd);
+          break;
+        case "UNEQUIP_ITEM":
+          await handleUnequipItem(io, socket, cmd);
+          break;
+        case "ADD_CONSUMABLE":
+          await handleAddConsumable(io, socket, cmd);
+          break;
+        case "START_SESSION":
+          await handleStartSession(io, socket, cmd);
+          break;
+        case "END_SESSION":
+          await handleEndSession(io, socket, cmd);
+          break;
+        case "SET_QUEST_STATUS":
+          await handleSetQuestStatus(io, socket, cmd);
           break;
         default:
           socket.emit("error", { message: "Unknown command" });
@@ -285,4 +311,209 @@ async function handleRemoveMonster(io: Server, socket: Socket, cmd: Extract<Sock
   await session.save();
 
   io.to(`session:${sessionId}`).emit("state_update", { type: "SESSION_UPDATED", session: docToJson(session) });
+}
+
+async function handleAddGold(io: Server, socket: Socket, cmd: Extract<SocketCommand, { type: "ADD_GOLD" }>) {
+  if (socket.data.role !== "gm") {
+    return socket.emit("error", { message: "Only GM can adjust gold" });
+  }
+
+  const { heroId, amount } = cmd;
+  const hero = await HeroModel.findById(heroId);
+  if (!hero) return socket.emit("error", { message: "Hero not found" });
+
+  if (hero.campaignId !== socket.data.campaignId) {
+    return socket.emit("error", { message: "Forbidden: hero is not in your campaign" });
+  }
+
+  hero.gold = Math.max(0, hero.gold + amount);
+  await hero.save();
+
+  io.to(`campaign:${hero.campaignId}`).emit("state_update", { type: "HERO_UPDATED", hero: docToJson(hero) });
+}
+
+async function handleEquipItem(io: Server, socket: Socket, cmd: Extract<SocketCommand, { type: "EQUIP_ITEM" }>) {
+  if (socket.data.role !== "gm") {
+    return socket.emit("error", { message: "Only GM can equip items" });
+  }
+
+  const { heroId, name, attackBonus, defendBonus } = cmd;
+  const hero = await HeroModel.findById(heroId);
+  if (!hero) return socket.emit("error", { message: "Hero not found" });
+
+  if (hero.campaignId !== socket.data.campaignId) {
+    return socket.emit("error", { message: "Forbidden: hero is not in your campaign" });
+  }
+
+  (hero.equipment as any).push({ id: nanoidEquip(), name, attackBonus, defendBonus });
+  await hero.save();
+
+  io.to(`campaign:${hero.campaignId}`).emit("state_update", { type: "HERO_UPDATED", hero: docToJson(hero) });
+}
+
+async function handleUnequipItem(io: Server, socket: Socket, cmd: Extract<SocketCommand, { type: "UNEQUIP_ITEM" }>) {
+  if (socket.data.role !== "gm") {
+    return socket.emit("error", { message: "Only GM can unequip items" });
+  }
+
+  const { heroId, equipId } = cmd;
+  const hero = await HeroModel.findById(heroId);
+  if (!hero) return socket.emit("error", { message: "Hero not found" });
+
+  if (hero.campaignId !== socket.data.campaignId) {
+    return socket.emit("error", { message: "Forbidden: hero is not in your campaign" });
+  }
+
+  (hero.equipment as any) = hero.equipment.filter((e: any) => e.id !== equipId);
+  await hero.save();
+
+  io.to(`campaign:${hero.campaignId}`).emit("state_update", { type: "HERO_UPDATED", hero: docToJson(hero) });
+}
+
+async function handleAddConsumable(io: Server, socket: Socket, cmd: Extract<SocketCommand, { type: "ADD_CONSUMABLE" }>) {
+  if (socket.data.role !== "gm") {
+    return socket.emit("error", { message: "Only GM can add consumables" });
+  }
+
+  const { heroId, name, quantity = 1, effect } = cmd;
+  const hero = await HeroModel.findById(heroId);
+  if (!hero) return socket.emit("error", { message: "Hero not found" });
+
+  if (hero.campaignId !== socket.data.campaignId) {
+    return socket.emit("error", { message: "Forbidden: hero is not in your campaign" });
+  }
+
+  (hero.consumables as any).push({ id: nanoidEquip(), name, quantity, effect });
+  await hero.save();
+
+  io.to(`campaign:${hero.campaignId}`).emit("state_update", { type: "HERO_UPDATED", hero: docToJson(hero) });
+}
+
+async function handleStartSession(io: Server, socket: Socket, cmd: Extract<SocketCommand, { type: "START_SESSION" }>) {
+  if (socket.data.role !== "gm") {
+    return socket.emit("error", { message: "Only GM can start a session" });
+  }
+
+  const campaignId = socket.data.campaignId as string;
+  const { questId } = cmd;
+
+  const campaign = await CampaignModel.findById(campaignId);
+  if (!campaign) return socket.emit("error", { message: "Campaign not found" });
+
+  if (campaign._id.toString() !== campaignId) {
+    return socket.emit("error", { message: "Forbidden" });
+  }
+
+  const quest = QUESTS.find((q) => q.id === questId);
+  if (!quest) return socket.emit("error", { message: "Quest not found" });
+
+  const pack = campaign.enabledPacks.find((p) => p === quest.packId) as PackId | undefined;
+  if (!pack) return socket.emit("error", { message: `Pack ${quest.packId} not enabled for this campaign` });
+
+  const rulesSnapshot = resolveEffectiveRules(quest.packId, quest);
+
+  const session = await SessionModel.create({
+    campaignId,
+    questId,
+    startedAt: new Date(),
+    rooms: [],
+    monsters: [],
+    rulesSnapshot,
+  });
+
+  await CampaignModel.findByIdAndUpdate(campaignId, { currentSessionId: session._id.toString() });
+  const updatedCampaign = await CampaignModel.findById(campaignId);
+
+  io.to(`campaign:${campaignId}`).emit("state_update", {
+    type: "SESSION_STARTED",
+    session: docToJson(session),
+    campaign: docToJson(updatedCampaign),
+  });
+}
+
+async function handleEndSession(io: Server, socket: Socket, cmd: Extract<SocketCommand, { type: "END_SESSION" }>) {
+  if (socket.data.role !== "gm") {
+    return socket.emit("error", { message: "Only GM can end a session" });
+  }
+
+  const { sessionId } = cmd;
+  const session = await SessionModel.findByIdAndUpdate(
+    sessionId,
+    { endedAt: new Date() },
+    { new: true }
+  );
+  if (!session) return socket.emit("error", { message: "Session not found" });
+
+  if (session.campaignId !== socket.data.campaignId) {
+    return socket.emit("error", { message: "Forbidden: session is not in your campaign" });
+  }
+
+  await CampaignModel.findOneAndUpdate(
+    { currentSessionId: sessionId },
+    { $unset: { currentSessionId: 1 } }
+  );
+
+  // Reset all heroes: restore full HP/MP, clear per-quest status flags and spell selections
+  await HeroModel.updateMany(
+    { campaignId: session.campaignId },
+    {
+      $set: {
+        "statusFlags.isDead": false,
+        "statusFlags.isInShock": false,
+        "statusFlags.isDisguised": false,
+      },
+      $unset: { spellsChosenThisQuest: 1 },
+    }
+  );
+  const heroes = await HeroModel.find({ campaignId: session.campaignId });
+  await Promise.all(
+    heroes.map((h) =>
+      HeroModel.findByIdAndUpdate(h._id, {
+        bodyPointsCurrent: h.bodyPointsMax,
+        mindPointsCurrent: h.mindPointsMax,
+      })
+    )
+  );
+
+  const updatedCampaign = await CampaignModel.findById(session.campaignId);
+
+  io.to(`campaign:${session.campaignId}`).emit("state_update", {
+    type: "SESSION_ENDED",
+    session: docToJson(session),
+    campaign: docToJson(updatedCampaign),
+  });
+}
+
+async function handleSetQuestStatus(io: Server, socket: Socket, cmd: Extract<SocketCommand, { type: "SET_QUEST_STATUS" }>) {
+  if (socket.data.role !== "gm") {
+    return socket.emit("error", { message: "Only GM can update quest status" });
+  }
+
+  const campaignId = socket.data.campaignId as string;
+  const { questId, status } = cmd;
+
+  const campaign = await CampaignModel.findById(campaignId);
+  if (!campaign) return socket.emit("error", { message: "Campaign not found" });
+
+  const entry = campaign.questLog.find((q) => q.questId === questId);
+  if (!entry) return socket.emit("error", { message: "Quest not in log" });
+
+  entry.status = status;
+  if (status === "completed") {
+    entry.completedAt = new Date();
+    // Auto-unlock the next quest in the log
+    const idx = campaign.questLog.findIndex((q) => q.questId === questId);
+    const next = campaign.questLog[idx + 1];
+    if (next && next.status === "locked") next.status = "available";
+
+    // Reset spell selections for all heroes — new quest means new spell picks
+    await HeroModel.updateMany({ campaignId }, { $set: { spellsChosenThisQuest: [] } });
+    const heroes = await HeroModel.find({ campaignId });
+    for (const h of heroes) {
+      io.to(`campaign:${campaignId}`).emit("state_update", { type: "HERO_UPDATED", hero: docToJson(h) });
+    }
+  }
+  await campaign.save();
+
+  io.to(`campaign:${campaignId}`).emit("state_update", { type: "CAMPAIGN_UPDATED", campaign: docToJson(campaign) });
 }

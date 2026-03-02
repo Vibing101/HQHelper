@@ -44,7 +44,6 @@ export default function PlayerSheet() {
   // Gear equip state
   const [selectedGearId, setSelectedGearId] = useState(EQUIP_GEAR[0]?.id ?? "");
   const [selectedConsumableId, setSelectedConsumableId] = useState(CONSUMABLE_GEAR[0]?.id ?? "");
-  const [equipping, setEquipping] = useState(false);
 
   // Dice roll toast
   const [diceToast, setDiceToast] = useState<string | null>(null);
@@ -128,13 +127,9 @@ export default function PlayerSheet() {
     sendCommand({ type: "USE_ITEM", heroId, itemId });
   }
 
-  async function adjustGold() {
+  function adjustGold() {
     if (!heroId || !goldInput) return;
-    await fetch(`/api/heroes/${heroId}/gold`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: Number(goldInput) }),
-    });
+    sendCommand({ type: "ADD_GOLD", heroId, amount: Number(goldInput) });
     setGoldInput("");
   }
 
@@ -157,43 +152,18 @@ export default function PlayerSheet() {
     sendCommand({ type: "ROLL_DICE", rollType, diceCount, results, rollerName: hero.name });
   }
 
-  async function equipFromCatalog() {
+  function equipFromCatalog() {
     if (!heroId || !selectedGearId) return;
     const item = EQUIP_GEAR.find((g) => g.id === selectedGearId);
     if (!item) return;
-    setEquipping(true);
-    try {
-      await fetch(`/api/heroes/${heroId}/equipment`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: item.name, attackBonus: item.attackBonus, defendBonus: item.defendBonus }),
-      });
-      // Refresh hero
-      const res = await fetch(`/api/heroes/${heroId}`);
-      const data = await res.json();
-      if (data.hero) setHero(data.hero);
-    } catch {/* ignore */} finally {
-      setEquipping(false);
-    }
+    sendCommand({ type: "EQUIP_ITEM", heroId, name: item.name, attackBonus: item.attackBonus, defendBonus: item.defendBonus });
   }
 
-  async function addConsumableFromCatalog() {
+  function addConsumableFromCatalog() {
     if (!heroId || !selectedConsumableId) return;
     const item = CONSUMABLE_GEAR.find((g) => g.id === selectedConsumableId);
     if (!item) return;
-    setEquipping(true);
-    try {
-      await fetch(`/api/heroes/${heroId}/consumables`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: item.name, effect: item.description, quantity: 1 }),
-      });
-      const res = await fetch(`/api/heroes/${heroId}`);
-      const data = await res.json();
-      if (data.hero) setHero(data.hero);
-    } catch {/* ignore */} finally {
-      setEquipping(false);
-    }
+    sendCommand({ type: "ADD_CONSUMABLE", heroId, name: item.name, effect: item.description, quantity: 1 });
   }
 
   if (loading) return <div className="flex items-center justify-center h-screen">Loading…</div>;
@@ -355,7 +325,7 @@ export default function PlayerSheet() {
                       </option>
                     ))}
                   </select>
-                  <button className="btn-secondary text-sm" onClick={equipFromCatalog} disabled={equipping}>
+                  <button className="btn-secondary text-sm" onClick={equipFromCatalog}>
                     Equip
                   </button>
                 </div>
@@ -404,7 +374,7 @@ export default function PlayerSheet() {
                       </option>
                     ))}
                   </select>
-                  <button className="btn-secondary text-sm" onClick={addConsumableFromCatalog} disabled={equipping}>
+                  <button className="btn-secondary text-sm" onClick={addConsumableFromCatalog}>
                     Add
                   </button>
                 </div>

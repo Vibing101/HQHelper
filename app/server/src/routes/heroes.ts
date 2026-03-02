@@ -1,25 +1,13 @@
 import { Router } from "express";
-import { customAlphabet } from "nanoid";
 import { HeroModel } from "../models/Hero";
 import { PartyModel } from "../models/Party";
 import { HERO_BASE_STATS } from "@hq/shared";
 import type { HeroTypeId } from "@hq/shared";
 import { docToJson } from "../utils/docToJson";
-import type { Server } from "socket.io";
 import { signToken } from "../auth";
 import { requireToken } from "../middleware/requireToken";
 
 const router = Router();
-const nanoidEquip = customAlphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
-
-// ─── Ownership helper ─────────────────────────────────────────────────────────
-
-/** Returns true when the token allows modifying the given hero. */
-function canModifyHero(heroId: string, heroPlayerId: string, token: { role: string; heroId?: string; playerId?: string }): boolean {
-  if (token.role === "gm") return true;
-  // Player can only modify their own hero (matched by heroId claim in token)
-  return token.heroId === heroId || token.playerId === heroPlayerId;
-}
 
 // ─── POST /api/heroes — create a hero (player token required) ─────────────────
 //
@@ -143,111 +131,6 @@ router.get("/:id", async (req, res) => {
     return res.json({ hero: docToJson(hero) });
   } catch (err) {
     return res.status(500).json({ error: "Failed to load hero" });
-  }
-});
-
-// ─── PATCH /api/heroes/:id/gold — award or deduct gold (GM only) ──────────────
-router.patch("/:id/gold", requireToken(["gm"]), async (req, res) => {
-  try {
-    const { amount } = req.body as { amount: number };
-    if (typeof amount !== "number") return res.status(400).json({ error: "amount must be a number" });
-
-    const hero = await HeroModel.findById(req.params.id);
-    if (!hero) return res.status(404).json({ error: "Not found" });
-
-    if (hero.campaignId !== req.tokenPayload!.campaignId) {
-      return res.status(403).json({ error: "Forbidden: hero is not in your campaign" });
-    }
-
-    hero.gold = Math.max(0, hero.gold + amount);
-    await hero.save();
-
-    const io = req.app.get("io") as Server;
-    io.to(`campaign:${hero.campaignId}`).emit("state_update", { type: "HERO_UPDATED", hero: docToJson(hero) });
-
-    return res.json({ hero: docToJson(hero) });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to update gold" });
-  }
-});
-
-// ─── POST /api/heroes/:id/equipment — add an equipment item (GM only) ─────────
-router.post("/:id/equipment", requireToken(["gm"]), async (req, res) => {
-  try {
-    const { name, attackBonus, defendBonus } = req.body as {
-      name: string;
-      attackBonus?: number;
-      defendBonus?: number;
-    };
-    if (!name) return res.status(400).json({ error: "name is required" });
-
-    const hero = await HeroModel.findById(req.params.id);
-    if (!hero) return res.status(404).json({ error: "Not found" });
-
-    if (hero.campaignId !== req.tokenPayload!.campaignId) {
-      return res.status(403).json({ error: "Forbidden: hero is not in your campaign" });
-    }
-
-    (hero.equipment as any).push({ id: nanoidEquip(), name, attackBonus, defendBonus });
-    await hero.save();
-
-    const io = req.app.get("io") as Server;
-    io.to(`campaign:${hero.campaignId}`).emit("state_update", { type: "HERO_UPDATED", hero: docToJson(hero) });
-
-    return res.status(201).json({ hero: docToJson(hero) });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to add equipment" });
-  }
-});
-
-// ─── DELETE /api/heroes/:id/equipment/:equipId — remove an equipment item (GM only)
-router.delete("/:id/equipment/:equipId", requireToken(["gm"]), async (req, res) => {
-  try {
-    const hero = await HeroModel.findById(req.params.id);
-    if (!hero) return res.status(404).json({ error: "Not found" });
-
-    if (hero.campaignId !== req.tokenPayload!.campaignId) {
-      return res.status(403).json({ error: "Forbidden: hero is not in your campaign" });
-    }
-
-    (hero.equipment as any) = hero.equipment.filter((e: any) => e.id !== req.params.equipId);
-    await hero.save();
-
-    const io = req.app.get("io") as Server;
-    io.to(`campaign:${hero.campaignId}`).emit("state_update", { type: "HERO_UPDATED", hero: docToJson(hero) });
-
-    return res.json({ hero: docToJson(hero) });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to remove equipment" });
-  }
-});
-
-// ─── POST /api/heroes/:id/consumables — add a consumable item (GM only) ───────
-router.post("/:id/consumables", requireToken(["gm"]), async (req, res) => {
-  try {
-    const { name, quantity = 1, effect } = req.body as {
-      name: string;
-      quantity?: number;
-      effect?: string;
-    };
-    if (!name) return res.status(400).json({ error: "name is required" });
-
-    const hero = await HeroModel.findById(req.params.id);
-    if (!hero) return res.status(404).json({ error: "Not found" });
-
-    if (hero.campaignId !== req.tokenPayload!.campaignId) {
-      return res.status(403).json({ error: "Forbidden: hero is not in your campaign" });
-    }
-
-    (hero.consumables as any).push({ id: nanoidEquip(), name, quantity, effect });
-    await hero.save();
-
-    const io = req.app.get("io") as Server;
-    io.to(`campaign:${hero.campaignId}`).emit("state_update", { type: "HERO_UPDATED", hero: docToJson(hero) });
-
-    return res.status(201).json({ hero: docToJson(hero) });
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to add consumable" });
   }
 });
 

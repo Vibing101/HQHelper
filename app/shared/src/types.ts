@@ -1,4 +1,5 @@
 export * from "./engine/dice";
+import type { CombatDieFace } from "./engine/dice";
 
 // ─── Pack & System IDs ──────────────────────────────────────────────────────
 
@@ -275,6 +276,50 @@ export type RollDiceCommand = {
   rollerName: string;
 };
 
+export type AddGoldCommand = {
+  type: "ADD_GOLD";
+  heroId: string;
+  amount: number;
+};
+
+export type EquipItemCommand = {
+  type: "EQUIP_ITEM";
+  heroId: string;
+  name: string;
+  attackBonus?: number;
+  defendBonus?: number;
+};
+
+export type UnequipItemCommand = {
+  type: "UNEQUIP_ITEM";
+  heroId: string;
+  equipId: string;
+};
+
+export type AddConsumableCommand = {
+  type: "ADD_CONSUMABLE";
+  heroId: string;
+  name: string;
+  quantity?: number;
+  effect?: string;
+};
+
+export type StartSessionCommand = {
+  type: "START_SESSION";
+  questId: string;
+};
+
+export type EndSessionCommand = {
+  type: "END_SESSION";
+  sessionId: string;
+};
+
+export type SetQuestStatusCommand = {
+  type: "SET_QUEST_STATUS";
+  questId: string;
+  status: "locked" | "available" | "completed";
+};
+
 export type SocketCommand =
   | AdjustPointsCommand
   | SelectHeroCommand
@@ -283,7 +328,14 @@ export type SocketCommand =
   | UseItemCommand
   | SpawnMonsterCommand
   | RemoveMonsterCommand
-  | RollDiceCommand;
+  | RollDiceCommand
+  | AddGoldCommand
+  | EquipItemCommand
+  | UnequipItemCommand
+  | AddConsumableCommand
+  | StartSessionCommand
+  | EndSessionCommand
+  | SetQuestStatusCommand;
 
 // ─── Hero Base Stats ──────────────────────────────────────────────────────────
 
