@@ -48,10 +48,11 @@ export default function PlayerLobby() {
 
   useEffect(() => {
     if (!code) return;
-    fetch(`/api/campaigns/join/${code}`)
+    fetch(`/api/campaigns/join/${code}?playerId=${encodeURIComponent(playerId)}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.error) throw new Error(data.error);
+        if (data.token) setToken(data.token);
         setCampaign(data.campaign);
         sessionStorage.setItem("campaignId", data.campaign.id);
         // Load existing heroes so players can rejoin
@@ -62,7 +63,7 @@ export default function PlayerLobby() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [code]);
+  }, [code, playerId, setToken]);
 
   // Compute allowed heroes from the most recent active quest (if any)
   // For lobby, we show all heroes allowed by the campaign's enabled packs
