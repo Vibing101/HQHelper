@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { GEAR_CATALOG, QUESTS, MONSTER_TYPES, resolveEffectiveRules } from "@hq/shared";
 import type { Campaign, Hero, Session } from "@hq/shared";
 import { joinSession, onDiceRoll, onStateUpdate, sendCommand } from "../socket";
+import { authFetch } from "../api";
 
 const EQUIP_GEAR = GEAR_CATALOG.filter((g) => g.category !== "consumable");
 const CONSUMABLE_GEAR = GEAR_CATALOG.filter((g) => g.category === "consumable");
@@ -136,9 +137,8 @@ export default function GMDashboard() {
 
   async function startSession() {
     if (!selectedQuestId || !campaignId) return;
-    const res = await fetch(`/api/campaigns/${campaignId}/sessions`, {
+    const res = await authFetch(`/api/campaigns/${campaignId}/sessions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ questId: selectedQuestId }),
     });
     const data = await res.json();
@@ -152,7 +152,7 @@ export default function GMDashboard() {
 
   async function endSession() {
     if (!session) return;
-    const res = await fetch(`/api/sessions/${session.id}/end`, { method: "PATCH" });
+    const res = await authFetch(`/api/sessions/${session.id}/end`, { method: "PATCH" });
     if (res.ok) {
       setSession(null);
       loadCampaign();
@@ -176,18 +176,16 @@ export default function GMDashboard() {
   }
 
   async function markQuestCompleted(questId: string) {
-    await fetch(`/api/campaigns/${campaignId}/quest-log/${questId}`, {
+    await authFetch(`/api/campaigns/${campaignId}/quest-log/${questId}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "completed" }),
     });
     loadCampaign();
   }
 
   async function unlockQuest(questId: string) {
-    await fetch(`/api/campaigns/${campaignId}/quest-log/${questId}`, {
+    await authFetch(`/api/campaigns/${campaignId}/quest-log/${questId}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "available" }),
     });
     loadCampaign();
@@ -201,9 +199,8 @@ export default function GMDashboard() {
 
   async function awardGold() {
     if (!managedHeroId || !goldAmount) return;
-    const res = await fetch(`/api/heroes/${managedHeroId}/gold`, {
+    const res = await authFetch(`/api/heroes/${managedHeroId}/gold`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ amount: Number(goldAmount) }),
     });
     const data = await res.json();
@@ -215,9 +212,8 @@ export default function GMDashboard() {
 
   async function addEquipment() {
     if (!managedHeroId || !newEquipName.trim()) return;
-    const res = await fetch(`/api/heroes/${managedHeroId}/equipment`, {
+    const res = await authFetch(`/api/heroes/${managedHeroId}/equipment`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: newEquipName.trim(),
         attackBonus: newEquipAtk ? Number(newEquipAtk) : undefined,
@@ -234,16 +230,15 @@ export default function GMDashboard() {
   }
 
   async function removeEquipment(heroId: string, equipId: string) {
-    const res = await fetch(`/api/heroes/${heroId}/equipment/${equipId}`, { method: "DELETE" });
+    const res = await authFetch(`/api/heroes/${heroId}/equipment/${equipId}`, { method: "DELETE" });
     const data = await res.json();
     if (res.ok) updateHeroInList(data.hero);
   }
 
   async function addConsumable() {
     if (!managedHeroId || !newConsumName.trim()) return;
-    const res = await fetch(`/api/heroes/${managedHeroId}/consumables`, {
+    const res = await authFetch(`/api/heroes/${managedHeroId}/consumables`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: newConsumName.trim(),
         quantity: Number(newConsumQty) || 1,
@@ -263,9 +258,8 @@ export default function GMDashboard() {
     if (!managedHeroId || !gmGearId) return;
     const item = EQUIP_GEAR.find((g) => g.id === gmGearId);
     if (!item) return;
-    const res = await fetch(`/api/heroes/${managedHeroId}/equipment`, {
+    const res = await authFetch(`/api/heroes/${managedHeroId}/equipment`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: item.name, attackBonus: item.attackBonus, defendBonus: item.defendBonus }),
     });
     const data = await res.json();
@@ -276,9 +270,8 @@ export default function GMDashboard() {
     if (!managedHeroId || !gmConsumableId) return;
     const item = CONSUMABLE_GEAR.find((g) => g.id === gmConsumableId);
     if (!item) return;
-    const res = await fetch(`/api/heroes/${managedHeroId}/consumables`, {
+    const res = await authFetch(`/api/heroes/${managedHeroId}/consumables`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: item.name, effect: item.description, quantity: 1 }),
     });
     const data = await res.json();

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { PackId } from "@hq/shared";
+import { useAuthStore } from "../store/authStore";
 
 const LS_GM_ID   = "gmCampaignId";
 const LS_GM_NAME = "gmCampaignName";
@@ -22,6 +23,8 @@ const PACK_OPTIONS: { id: PackId; label: string; subtitle: string; heroes: strin
 
 export default function Home() {
   const navigate = useNavigate();
+  const { setToken } = useAuthStore();
+
   const [tab, setTab] = useState<"create" | "join">("create");
   const [savedCampaignId]   = useState(() => localStorage.getItem(LS_GM_ID));
   const [savedCampaignName] = useState(() => localStorage.getItem(LS_GM_NAME));
@@ -50,7 +53,10 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to create");
-      sessionStorage.setItem("role", "gm");
+
+      // Store the GM token issued by the server (persists to localStorage)
+      setToken(data.token);
+
       sessionStorage.setItem("campaignId", data.campaign.id);
       localStorage.setItem(LS_GM_ID, data.campaign.id);
       localStorage.setItem(LS_GM_NAME, data.campaign.name);
@@ -69,10 +75,20 @@ export default function Home() {
     if (!code) return;
     setJoining(true);
     try {
-      const res = await fetch(`/api/campaigns/join/${code}`);
+      // Reuse or generate a persistent player ID for this browser / tab
+      let pid = sessionStorage.getItem("playerId");
+      if (!pid) {
+        pid = `player-${Math.random().toString(36).slice(2, 9)}`;
+        sessionStorage.setItem("playerId", pid);
+      }
+
+      const res = await fetch(`/api/campaigns/join/${code}?playerId=${encodeURIComponent(pid)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Campaign not found");
-      sessionStorage.setItem("role", "player");
+
+      // Store the player token issued by the server
+      setToken(data.token);
+
       sessionStorage.setItem("campaignId", data.campaign.id);
       navigate(`/play/${code}`);
     } catch (err: any) {
@@ -110,7 +126,6 @@ export default function Home() {
             <button
               className="btn-primary text-sm px-4 py-1.5"
               onClick={() => {
-                sessionStorage.setItem("role", "gm");
                 sessionStorage.setItem("campaignId", savedCampaignId);
                 navigate(`/gm/${savedCampaignId}`);
               }}

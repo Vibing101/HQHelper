@@ -1,13 +1,18 @@
 /// <reference types="vite/client" />
 import { io, Socket } from "socket.io-client";
 import type { SocketCommand } from "@hq/shared";
+import { getStoredToken } from "./store/authStore";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "http://localhost:4000";
 
+// Keep only the sessionId from JoinParams — campaignId/role/playerId are now
+// derived from the verified JWT on the server, so clients no longer supply them.
+// The full shape is retained here for backward compatibility with existing callers
+// (the server simply ignores the now-redundant fields).
 type JoinParams = {
-  campaignId: string;
+  campaignId?: string;
   sessionId?: string;
-  role: "gm" | "player";
+  role?: "gm" | "player";
   playerId?: string;
 };
 
@@ -16,13 +21,18 @@ let lastJoinParams: JoinParams | null = null;
 
 export function getSocket(): Socket {
   if (!socket) {
-    socket = io(SERVER_URL, { autoConnect: false });
+    socket = io(SERVER_URL, {
+      // Use a callback so every connection attempt (including reconnects)
+      // reads the latest token from storage rather than capturing a stale value.
+      auth: (cb) => cb({ token: getStoredToken() ?? "" }),
+      autoConnect: false,
+    });
 
-    // Re-join rooms automatically after a reconnect so socket.data and room
-    // membership are restored without requiring a page reload.
+    // Re-join rooms automatically after a reconnect so socket room membership
+    // is restored without requiring a page reload.
     socket.on("reconnect", () => {
       if (lastJoinParams) {
-        socket!.emit("join", lastJoinParams);
+        socket!.emit("join", { sessionId: lastJoinParams.sessionId });
       }
     });
   }
@@ -34,9 +44,10 @@ export function joinSession(params: JoinParams): Promise<void> {
   return new Promise((resolve, reject) => {
     const s = getSocket();
     s.connect();
-    s.emit("join", params);
+    // Only pass sessionId to the server — identity comes from the JWT
+    s.emit("join", { sessionId: params.sessionId });
     s.once("joined", () => resolve());
-    s.once("connect_error", reject);
+    s.once("connect_error", (err) => reject(err));
   });
 }
 

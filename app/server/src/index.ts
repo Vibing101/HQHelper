@@ -11,6 +11,7 @@ import campaignRoutes from "./routes/campaigns";
 import sessionRoutes from "./routes/sessions";
 import heroRoutes from "./routes/heroes";
 import { registerSocketHandlers } from "./socket/handlers";
+import { verifyToken } from "./auth";
 
 const PORT = Number(process.env.PORT ?? 4000);
 const MONGODB_URI = process.env.MONGODB_URI ?? "mongodb://localhost:27017/heroquest";
@@ -50,19 +51,48 @@ const CLIENT_DIST = path.resolve(__dirname, "../../client/dist");
 app.use(express.static(CLIENT_DIST));
 app.get("*", (_req, res) => res.sendFile(path.join(CLIENT_DIST, "index.html")));
 
-// ─── Socket.io ────────────────────────────────────────────────────────────────
+// ─── Socket.io Auth Middleware ────────────────────────────────────────────────
+//
+// Every socket connection must present a valid JWT in socket.handshake.auth.token.
+// On success, verified claims are written into socket.data so downstream handlers
+// can trust them.  Clients may NOT override socket.data via the "join" event.
+
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token as string | undefined;
+  if (!token) {
+    return next(new Error("Unauthorized: no token provided"));
+  }
+  try {
+    const payload = verifyToken(token);
+    // Write each claim individually — never spread the whole payload so that
+    // JWT-internal fields (iat/exp) don't end up on socket.data.
+    socket.data.campaignId = payload.campaignId;
+    socket.data.role       = payload.role;
+    socket.data.playerId   = payload.playerId;
+    socket.data.heroId     = payload.heroId;
+    next();
+  } catch {
+    next(new Error("Unauthorized: invalid or expired token"));
+  }
+});
+
+// ─── Socket.io Connection ─────────────────────────────────────────────────────
 
 io.on("connection", (socket) => {
   console.log(`[socket] Connected: ${socket.id}`);
 
-  // Client sends join event: { campaignId, sessionId?, role, playerId? }
-  socket.on("join", (data: { campaignId: string; sessionId?: string; role: "gm" | "player"; playerId?: string }) => {
-    socket.data = { ...data };
-    socket.join(`campaign:${data.campaignId}`);
+  // Client sends join event: { sessionId? }
+  // Identity (campaignId, role, playerId, heroId) comes exclusively from the
+  // verified JWT populated above — never from client-supplied join data.
+  socket.on("join", (data: { sessionId?: string; [key: string]: unknown }) => {
+    socket.join(`campaign:${socket.data.campaignId}`);
     if (data.sessionId) {
       socket.join(`session:${data.sessionId}`);
+      socket.data.sessionId = data.sessionId;
     }
-    console.log(`[socket] ${socket.id} joined campaign:${data.campaignId} as ${data.role}`);
+    console.log(
+      `[socket] ${socket.id} joined campaign:${socket.data.campaignId} as ${socket.data.role}`
+    );
     socket.emit("joined", { ok: true });
   });
 

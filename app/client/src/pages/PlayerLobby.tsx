@@ -3,6 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { HERO_BASE_STATS, resolveEffectiveRules, QUESTS, PACKS } from "@hq/shared";
 import type { Campaign, Hero, HeroTypeId } from "@hq/shared";
 import { joinSession } from "../socket";
+import { useAuthStore } from "../store/authStore";
+import { authFetch } from "../api";
 
 const HERO_ICONS: Record<string, string> = {
   barbarian: "⚔️",
@@ -23,6 +25,7 @@ const HERO_DESCRIPTIONS: Record<string, string> = {
 export default function PlayerLobby() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
+  const { setToken } = useAuthStore();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [existingHeroes, setExistingHeroes] = useState<Hero[]>([]);
   const [error, setError] = useState("");
@@ -81,28 +84,39 @@ export default function PlayerLobby() {
 
   async function claimHero(heroId: string) {
     if (!campaign) return;
-    await joinSession({ campaignId: campaign.id, role: "player", playerId });
-    sessionStorage.setItem("heroId", heroId);
-    navigate(`/hero/${heroId}`);
+    try {
+      // Get an updated token that includes heroId, proving ownership
+      const res = await authFetch(`/api/heroes/${heroId}/claim`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not claim hero");
+      setToken(data.token);
+      await joinSession({ campaignId: campaign.id, role: "player", playerId });
+      sessionStorage.setItem("heroId", heroId);
+      navigate(`/hero/${heroId}`);
+    } catch (e: any) {
+      setError(e.message);
+    }
   }
 
   async function createHero() {
     if (!selectedHero || !heroName.trim() || !campaign) return;
     setCreating(true);
     try {
-      const res = await fetch("/api/heroes", {
+      // heroTypeId, name, partyId go in the body.
+      // playerId and campaignId are sourced from the Bearer token server-side.
+      const res = await authFetch("/api/heroes", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           heroTypeId: selectedHero,
           name: heroName.trim(),
-          playerId,
-          campaignId: campaign.id,
           partyId: campaign.partyId,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+
+      // Server returns an updated token that now includes heroId
+      setToken(data.token);
 
       await joinSession({ campaignId: campaign.id, role: "player", playerId });
       sessionStorage.setItem("heroId", data.hero.id);
