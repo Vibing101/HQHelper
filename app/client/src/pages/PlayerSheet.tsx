@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import type { Hero } from "@hq/shared";
-import { GEAR_CATALOG, ITEM_CATALOG, HERO_SPELL_ACCESS, SPELLS, rollCombatDice, countHitsForHeroAttack, countBlocksForHeroDefense, resolveEffectiveHeroDice } from "@hq/shared";
+import { ITEM_CATALOG, HERO_SPELL_ACCESS, SPELLS, rollCombatDice, countHitsForHeroAttack, countBlocksForHeroDefense, resolveEffectiveHeroDice } from "@hq/shared";
 import type { EquipSlot } from "@hq/shared";
 import type { SpellElement } from "@hq/shared";
 import type { EffectiveRules, Party } from "@hq/shared";
@@ -31,9 +31,6 @@ const ELEMENT_LABELS: Record<string, string> = {
 };
 
 // Equipable items (have a slot) and consumables
-const EQUIP_GEAR = ITEM_CATALOG.filter((g) => g.equipSlot !== undefined);
-const CONSUMABLE_GEAR = GEAR_CATALOG.filter((g) => g.category === "consumable");
-
 export default function PlayerSheet() {
   const { heroId } = useParams<{ heroId: string }>();
   const [hero, setHero] = useState<Hero | null>(null);
@@ -46,16 +43,9 @@ export default function PlayerSheet() {
   const [socketError, setSocketError] = useState("");
   const [tab, setTab] = useState<"stats" | "inventory" | "spells">("stats");
 
-  // Gear equip state
-  const [selectedGearId, setSelectedGearId] = useState(EQUIP_GEAR[0]?.id ?? "");
-  const [selectedConsumableId, setSelectedConsumableId] = useState(CONSUMABLE_GEAR[0]?.id ?? "");
-
   // Dice roll toast
   const [diceToast, setDiceToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Gold adjustment
-  const [goldInput, setGoldInput] = useState("");
   const [reagentInput, setReagentInput] = useState("");
   const [potionInput, setPotionInput] = useState("");
 
@@ -176,12 +166,6 @@ export default function PlayerSheet() {
     sendCommand({ type: "USE_ITEM", heroId, itemId });
   }
 
-  function adjustGold() {
-    if (!heroId || !goldInput) return;
-    sendCommand({ type: "ADD_GOLD", heroId, amount: Number(goldInput) });
-    setGoldInput("");
-  }
-
   // Spell element selection — choosing an element grants all spells in that element
   function toggleElement(element: string) {
     if (!hero || !heroId) return;
@@ -200,20 +184,6 @@ export default function PlayerSheet() {
     const diceCount = rollType === "attack" ? effectiveAttack : effectiveDefend;
     const results = rollCombatDice(diceCount);
     sendCommand({ type: "ROLL_DICE", rollType, diceCount, results, rollerName: hero.name });
-  }
-
-  function equipFromCatalog() {
-    if (!heroId || !selectedGearId) return;
-    const item = EQUIP_GEAR.find((g) => g.id === selectedGearId);
-    if (!item?.equipSlot) return;
-    sendCommand({ type: "EQUIP_ITEM", heroId, itemId: item.id, slot: item.equipSlot as EquipSlot });
-  }
-
-  function addConsumableFromCatalog() {
-    if (!heroId || !selectedConsumableId) return;
-    const item = CONSUMABLE_GEAR.find((g) => g.id === selectedConsumableId);
-    if (!item) return;
-    sendCommand({ type: "ADD_CONSUMABLE", heroId, name: item.name, effect: item.description, quantity: 1 });
   }
 
   if (loading) return <div className="flex items-center justify-center h-screen">Loading…</div>;
@@ -393,18 +363,6 @@ export default function PlayerSheet() {
                 You have <span className="text-hq-amber font-bold">{hero.gold}</span> 💰
                 {partyGold !== null && <span className="text-parchment/40"> (Party total: {partyGold})</span>}
               </p>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  className="input flex-1"
-                  placeholder="Amount (negative to spend)"
-                  value={goldInput}
-                  onChange={(e) => setGoldInput(e.target.value)}
-                />
-                <button className="btn-secondary" onClick={adjustGold} disabled={!goldInput}>
-                  Update
-                </button>
-              </div>
             </div>
 
             <div className="card space-y-3">
@@ -426,26 +384,6 @@ export default function PlayerSheet() {
                   })}
                 </ul>
               )}
-              {/* Equip from armory */}
-              <div className="pt-2 border-t border-parchment/10">
-                <p className="text-xs text-parchment/50 mb-2">Add from Armory</p>
-                <div className="flex gap-2">
-                  <select
-                    className="input flex-1 text-sm"
-                    value={selectedGearId}
-                    onChange={(e) => setSelectedGearId(e.target.value)}
-                  >
-                    {EQUIP_GEAR.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.name} — {g.description} ({g.costGold}g)
-                      </option>
-                    ))}
-                  </select>
-                  <button className="btn-secondary text-sm" onClick={equipFromCatalog}>
-                    Equip
-                  </button>
-                </div>
-              </div>
             </div>
 
             <div className="card space-y-3">
@@ -517,26 +455,6 @@ export default function PlayerSheet() {
                   )})}
                 </ul>
               )}
-              {/* Add consumable from catalog */}
-              <div className="pt-2 border-t border-parchment/10">
-                <p className="text-xs text-parchment/50 mb-2">Add from General Store</p>
-                <div className="flex gap-2">
-                  <select
-                    className="input flex-1 text-sm"
-                    value={selectedConsumableId}
-                    onChange={(e) => setSelectedConsumableId(e.target.value)}
-                  >
-                    {CONSUMABLE_GEAR.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.name} — {g.description} ({g.costGold}g)
-                      </option>
-                    ))}
-                  </select>
-                  <button className="btn-secondary text-sm" onClick={addConsumableFromCatalog}>
-                    Add
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
         )}

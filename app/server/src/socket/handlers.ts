@@ -220,9 +220,16 @@ async function handleAdjustPoints(io: Server, socket: Socket, cmd: Extract<Socke
 
 // SELECT_HERO — lobby broadcast so other players see who has claimed a hero type
 async function handleSelectHero(io: Server, socket: Socket, cmd: Extract<SocketCommand, { type: "SELECT_HERO" }>) {
-  const { sessionId, playerId, heroTypeId, heroName } = cmd;
+  const { sessionId, heroTypeId, heroName } = cmd;
+  const selectedPlayerId = (socket.data.playerId as string | undefined) ?? cmd.playerId;
+  if (!selectedPlayerId) {
+    return socket.emit("error", { message: "Player identity missing on socket" });
+  }
   const session = await SessionModel.findById(sessionId);
   if (!session) return socket.emit("error", { message: "Session not found" });
+  if (session.campaignId !== socket.data.campaignId) {
+    return socket.emit("error", { message: "Forbidden: session is not in your campaign" });
+  }
 
   const rules = session.rulesSnapshot as unknown as EffectiveRules;
   if (!rules.allowedHeroes.includes(heroTypeId)) {
@@ -237,7 +244,7 @@ async function handleSelectHero(io: Server, socket: Socket, cmd: Extract<SocketC
     }
   }
 
-  io.to(`session:${sessionId}`).emit("state_update", { type: "HERO_SELECTED", playerId, heroTypeId, heroName });
+  io.to(`session:${sessionId}`).emit("state_update", { type: "HERO_SELECTED", playerId: selectedPlayerId, heroTypeId, heroName });
 }
 
 async function handleSelectSpell(io: Server, socket: Socket, cmd: Extract<SocketCommand, { type: "SELECT_SPELL" }>) {
