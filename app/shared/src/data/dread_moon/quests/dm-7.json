@@ -1,24 +1,62 @@
 {
   "id": "dm-7",
   "packId": "DREAD_MOON",
-  "number": 7,
-  "title": "The Shadow Vaults",
   "roomGraph": {
-    "room-1": ["room-2"],
-    "room-2": ["room-1", "room-3", "room-4"],
-    "room-3": ["room-2", "room-5"],
-    "room-4": ["room-2", "room-6"],
-    "room-5": ["room-3", "room-7"],
-    "room-6": ["room-4", "room-7", "room-8"],
-    "room-7": ["room-5", "room-6"],
-    "room-8": ["room-6", "room-9"],
-    "room-9": ["room-8", "room-10"],
-    "room-10": ["room-9", "room-11"],
-    "room-11": ["room-10"]
+    "room-1": [
+      "room-2"
+    ],
+    "room-2": [
+      "room-1",
+      "room-3",
+      "room-4"
+    ],
+    "room-3": [
+      "room-2",
+      "room-5"
+    ],
+    "room-4": [
+      "room-2",
+      "room-6"
+    ],
+    "room-5": [
+      "room-3",
+      "room-7"
+    ],
+    "room-6": [
+      "room-4",
+      "room-7",
+      "room-8"
+    ],
+    "room-7": [
+      "room-5",
+      "room-6"
+    ],
+    "room-8": [
+      "room-6",
+      "room-9"
+    ],
+    "room-9": [
+      "room-8",
+      "room-10"
+    ],
+    "room-10": [
+      "room-9",
+      "room-11"
+    ],
+    "room-11": [
+      "room-10"
+    ]
   },
   "roomSpawns": {},
   "flags": {
-    "enabledSystems": { "disguises": true, "mindShock": true }
+    "enabledSystems": {
+      "disguises": true,
+      "mindShock": true
+    }
   },
-  "specialRuleTags": ["disguise_zone", "mind_shock_hazard", "vault_lock"]
+  "specialRuleTags": [
+    "disguise_zone",
+    "mind_shock_hazard",
+    "vault_lock"
+  ]
 }

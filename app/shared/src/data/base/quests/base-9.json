@@ -1,26 +1,78 @@
 {
   "id": "base-9",
   "packId": "BASE",
-  "number": 9,
-  "title": "Prince Magnus's Gold",
   "roomGraph": {
-    "room-1": ["room-2"],
-    "room-2": ["room-1", "room-3", "room-4"],
-    "room-3": ["room-2", "room-5"],
-    "room-4": ["room-2", "room-6"],
-    "room-5": ["room-3", "room-7"],
-    "room-6": ["room-4", "room-7"],
-    "room-7": ["room-5", "room-6", "room-8"],
-    "room-8": ["room-7", "room-9"],
-    "room-9": ["room-8"]
+    "room-1": [
+      "room-2"
+    ],
+    "room-2": [
+      "room-1",
+      "room-3",
+      "room-4"
+    ],
+    "room-3": [
+      "room-2",
+      "room-5"
+    ],
+    "room-4": [
+      "room-2",
+      "room-6"
+    ],
+    "room-5": [
+      "room-3",
+      "room-7"
+    ],
+    "room-6": [
+      "room-4",
+      "room-7"
+    ],
+    "room-7": [
+      "room-5",
+      "room-6",
+      "room-8"
+    ],
+    "room-8": [
+      "room-7",
+      "room-9"
+    ],
+    "room-9": [
+      "room-8"
+    ]
   },
   "roomSpawns": {
-    "room-1": [{ "monsterTypeId": "goblin",         "count": 2 }],
-    "room-3": [{ "monsterTypeId": "orc",             "count": 2 }],
-    "room-5": [{ "monsterTypeId": "chaos_warrior", "count": 2 }],
-    "room-7": [{ "monsterTypeId": "mummy",           "count": 1 }],
-    "room-9": [{ "monsterTypeId": "gargoyle",        "count": 1 }]
+    "room-1": [
+      {
+        "monsterTypeId": "goblin",
+        "count": 2
+      }
+    ],
+    "room-3": [
+      {
+        "monsterTypeId": "orc",
+        "count": 2
+      }
+    ],
+    "room-5": [
+      {
+        "monsterTypeId": "chaos_warrior",
+        "count": 2
+      }
+    ],
+    "room-7": [
+      {
+        "monsterTypeId": "mummy",
+        "count": 1
+      }
+    ],
+    "room-9": [
+      {
+        "monsterTypeId": "gargoyle",
+        "count": 1
+      }
+    ]
   },
   "flags": {},
-  "specialRuleTags": ["treasure_hunt"]
+  "specialRuleTags": [
+    "treasure_hunt"
+  ]
 }

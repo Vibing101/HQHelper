@@ -1,27 +1,85 @@
 {
   "id": "base-8",
   "packId": "BASE",
-  "number": 8,
-  "title": "Maze of the Witch Lord",
   "roomGraph": {
-    "room-1": ["room-2", "room-3"],
-    "room-2": ["room-1", "room-4"],
-    "room-3": ["room-1", "room-5"],
-    "room-4": ["room-2", "room-6"],
-    "room-5": ["room-3", "room-6", "room-7"],
-    "room-6": ["room-4", "room-5", "room-8"],
-    "room-7": ["room-5", "room-9"],
-    "room-8": ["room-6", "room-9"],
-    "room-9": ["room-7", "room-8", "room-10"],
-    "room-10": ["room-9"]
+    "room-1": [
+      "room-2",
+      "room-3"
+    ],
+    "room-2": [
+      "room-1",
+      "room-4"
+    ],
+    "room-3": [
+      "room-1",
+      "room-5"
+    ],
+    "room-4": [
+      "room-2",
+      "room-6"
+    ],
+    "room-5": [
+      "room-3",
+      "room-6",
+      "room-7"
+    ],
+    "room-6": [
+      "room-4",
+      "room-5",
+      "room-8"
+    ],
+    "room-7": [
+      "room-5",
+      "room-9"
+    ],
+    "room-8": [
+      "room-6",
+      "room-9"
+    ],
+    "room-9": [
+      "room-7",
+      "room-8",
+      "room-10"
+    ],
+    "room-10": [
+      "room-9"
+    ]
   },
   "roomSpawns": {
-    "room-2":  [{ "monsterTypeId": "zombie",         "count": 2 }],
-    "room-4":  [{ "monsterTypeId": "skeleton",       "count": 3 }],
-    "room-6":  [{ "monsterTypeId": "chaos_warrior", "count": 2 }],
-    "room-8":  [{ "monsterTypeId": "mummy",          "count": 2 }],
-    "room-10": [{ "monsterTypeId": "gargoyle",       "count": 1 }]
+    "room-2": [
+      {
+        "monsterTypeId": "zombie",
+        "count": 2
+      }
+    ],
+    "room-4": [
+      {
+        "monsterTypeId": "skeleton",
+        "count": 3
+      }
+    ],
+    "room-6": [
+      {
+        "monsterTypeId": "chaos_warrior",
+        "count": 2
+      }
+    ],
+    "room-8": [
+      {
+        "monsterTypeId": "mummy",
+        "count": 2
+      }
+    ],
+    "room-10": [
+      {
+        "monsterTypeId": "gargoyle",
+        "count": 1
+      }
+    ]
   },
   "flags": {},
-  "specialRuleTags": ["maze", "undead_only"]
+  "specialRuleTags": [
+    "maze",
+    "undead_only"
+  ]
 }

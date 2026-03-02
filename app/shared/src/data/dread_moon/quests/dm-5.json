@@ -1,22 +1,52 @@
 {
   "id": "dm-5",
   "packId": "DREAD_MOON",
-  "number": 5,
-  "title": "The Crystal Caves",
   "roomGraph": {
-    "room-1": ["room-2"],
-    "room-2": ["room-1", "room-3", "room-4"],
-    "room-3": ["room-2", "room-5"],
-    "room-4": ["room-2", "room-6"],
-    "room-5": ["room-3", "room-7"],
-    "room-6": ["room-4", "room-8"],
-    "room-7": ["room-5", "room-9"],
-    "room-8": ["room-6", "room-9"],
-    "room-9": ["room-7", "room-8"]
+    "room-1": [
+      "room-2"
+    ],
+    "room-2": [
+      "room-1",
+      "room-3",
+      "room-4"
+    ],
+    "room-3": [
+      "room-2",
+      "room-5"
+    ],
+    "room-4": [
+      "room-2",
+      "room-6"
+    ],
+    "room-5": [
+      "room-3",
+      "room-7"
+    ],
+    "room-6": [
+      "room-4",
+      "room-8"
+    ],
+    "room-7": [
+      "room-5",
+      "room-9"
+    ],
+    "room-8": [
+      "room-6",
+      "room-9"
+    ],
+    "room-9": [
+      "room-7",
+      "room-8"
+    ]
   },
   "roomSpawns": {},
   "flags": {
-    "enabledSystems": { "mindShock": true }
+    "enabledSystems": {
+      "mindShock": true
+    }
   },
-  "specialRuleTags": ["mind_shock_hazard", "crystal_resonance"]
+  "specialRuleTags": [
+    "mind_shock_hazard",
+    "crystal_resonance"
+  ]
 }

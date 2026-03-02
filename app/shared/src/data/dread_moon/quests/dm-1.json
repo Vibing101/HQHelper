@@ -1,22 +1,52 @@
 {
   "id": "dm-1",
   "packId": "DREAD_MOON",
-  "number": 1,
-  "title": "The Mark of Dread",
   "roomGraph": {
-    "room-1": ["room-2"],
-    "room-2": ["room-1", "room-3", "room-4"],
-    "room-3": ["room-2", "room-5"],
-    "room-4": ["room-2", "room-6"],
-    "room-5": ["room-3", "room-7"],
-    "room-6": ["room-4", "room-7"],
-    "room-7": ["room-5", "room-6", "room-8"],
-    "room-8": ["room-7", "room-9"],
-    "room-9": ["room-8"]
+    "room-1": [
+      "room-2"
+    ],
+    "room-2": [
+      "room-1",
+      "room-3",
+      "room-4"
+    ],
+    "room-3": [
+      "room-2",
+      "room-5"
+    ],
+    "room-4": [
+      "room-2",
+      "room-6"
+    ],
+    "room-5": [
+      "room-3",
+      "room-7"
+    ],
+    "room-6": [
+      "room-4",
+      "room-7"
+    ],
+    "room-7": [
+      "room-5",
+      "room-6",
+      "room-8"
+    ],
+    "room-8": [
+      "room-7",
+      "room-9"
+    ],
+    "room-9": [
+      "room-8"
+    ]
   },
   "roomSpawns": {},
   "flags": {
-    "enabledSystems": { "reputationTokens": true }
+    "enabledSystems": {
+      "reputationTokens": true
+    }
   },
-  "specialRuleTags": ["intro_quest", "reputation_gate"]
+  "specialRuleTags": [
+    "intro_quest",
+    "reputation_gate"
+  ]
 }

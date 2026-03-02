@@ -1,21 +1,55 @@
 {
   "id": "dm-8",
   "packId": "DREAD_MOON",
-  "number": 8,
-  "title": "The Dread Moon Rising",
   "roomGraph": {
-    "room-1": ["room-2"],
-    "room-2": ["room-1", "room-3", "room-4"],
-    "room-3": ["room-2", "room-5"],
-    "room-4": ["room-2", "room-6"],
-    "room-5": ["room-3", "room-7"],
-    "room-6": ["room-4", "room-7", "room-8"],
-    "room-7": ["room-5", "room-6"],
-    "room-8": ["room-6", "room-9"],
-    "room-9": ["room-8", "room-10"],
-    "room-10": ["room-9", "room-11"],
-    "room-11": ["room-10", "room-12"],
-    "room-12": ["room-11"]
+    "room-1": [
+      "room-2"
+    ],
+    "room-2": [
+      "room-1",
+      "room-3",
+      "room-4"
+    ],
+    "room-3": [
+      "room-2",
+      "room-5"
+    ],
+    "room-4": [
+      "room-2",
+      "room-6"
+    ],
+    "room-5": [
+      "room-3",
+      "room-7"
+    ],
+    "room-6": [
+      "room-4",
+      "room-7",
+      "room-8"
+    ],
+    "room-7": [
+      "room-5",
+      "room-6"
+    ],
+    "room-8": [
+      "room-6",
+      "room-9"
+    ],
+    "room-9": [
+      "room-8",
+      "room-10"
+    ],
+    "room-10": [
+      "room-9",
+      "room-11"
+    ],
+    "room-11": [
+      "room-10",
+      "room-12"
+    ],
+    "room-12": [
+      "room-11"
+    ]
   },
   "roomSpawns": {},
   "flags": {
@@ -27,5 +61,10 @@
       "mindShock": true
     }
   },
-  "specialRuleTags": ["final_quest", "boss_room", "all_systems_active", "dread_moon_event"]
+  "specialRuleTags": [
+    "final_quest",
+    "boss_room",
+    "all_systems_active",
+    "dread_moon_event"
+  ]
 }

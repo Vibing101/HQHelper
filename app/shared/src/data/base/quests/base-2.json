@@ -1,27 +1,82 @@
 {
   "id": "base-2",
   "packId": "BASE",
-  "number": 2,
-  "title": "The Maze of Zagor",
   "roomGraph": {
-    "room-1": ["room-2", "room-4"],
-    "room-2": ["room-1", "room-3"],
-    "room-3": ["room-2", "room-6"],
-    "room-4": ["room-1", "room-5"],
-    "room-5": ["room-4", "room-6", "room-8"],
-    "room-6": ["room-3", "room-5", "room-7"],
-    "room-7": ["room-6"],
-    "room-8": ["room-5", "room-9"],
-    "room-9": ["room-8", "room-10"],
-    "room-10": ["room-9"]
+    "room-1": [
+      "room-2",
+      "room-4"
+    ],
+    "room-2": [
+      "room-1",
+      "room-3"
+    ],
+    "room-3": [
+      "room-2",
+      "room-6"
+    ],
+    "room-4": [
+      "room-1",
+      "room-5"
+    ],
+    "room-5": [
+      "room-4",
+      "room-6",
+      "room-8"
+    ],
+    "room-6": [
+      "room-3",
+      "room-5",
+      "room-7"
+    ],
+    "room-7": [
+      "room-6"
+    ],
+    "room-8": [
+      "room-5",
+      "room-9"
+    ],
+    "room-9": [
+      "room-8",
+      "room-10"
+    ],
+    "room-10": [
+      "room-9"
+    ]
   },
   "roomSpawns": {
-    "room-2":  [{ "monsterTypeId": "goblin",        "count": 2 }],
-    "room-4":  [{ "monsterTypeId": "orc",            "count": 2 }],
-    "room-6":  [{ "monsterTypeId": "goblin",        "count": 1 }],
-    "room-8":  [{ "monsterTypeId": "orc",            "count": 1 }],
-    "room-10": [{ "monsterTypeId": "chaos_warrior", "count": 1 }]
+    "room-2": [
+      {
+        "monsterTypeId": "goblin",
+        "count": 2
+      }
+    ],
+    "room-4": [
+      {
+        "monsterTypeId": "orc",
+        "count": 2
+      }
+    ],
+    "room-6": [
+      {
+        "monsterTypeId": "goblin",
+        "count": 1
+      }
+    ],
+    "room-8": [
+      {
+        "monsterTypeId": "orc",
+        "count": 1
+      }
+    ],
+    "room-10": [
+      {
+        "monsterTypeId": "chaos_warrior",
+        "count": 1
+      }
+    ]
   },
   "flags": {},
-  "specialRuleTags": ["maze"]
+  "specialRuleTags": [
+    "maze"
+  ]
 }

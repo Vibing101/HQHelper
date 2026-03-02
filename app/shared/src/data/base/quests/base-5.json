@@ -1,26 +1,78 @@
 {
   "id": "base-5",
   "packId": "BASE",
-  "number": 5,
-  "title": "The Castle of Mystery",
   "roomGraph": {
-    "room-1": ["room-2", "room-3"],
-    "room-2": ["room-1", "room-4"],
-    "room-3": ["room-1", "room-5"],
-    "room-4": ["room-2", "room-6"],
-    "room-5": ["room-3", "room-6", "room-7"],
-    "room-6": ["room-4", "room-5"],
-    "room-7": ["room-5", "room-8"],
-    "room-8": ["room-7", "room-9"],
-    "room-9": ["room-8"]
+    "room-1": [
+      "room-2",
+      "room-3"
+    ],
+    "room-2": [
+      "room-1",
+      "room-4"
+    ],
+    "room-3": [
+      "room-1",
+      "room-5"
+    ],
+    "room-4": [
+      "room-2",
+      "room-6"
+    ],
+    "room-5": [
+      "room-3",
+      "room-6",
+      "room-7"
+    ],
+    "room-6": [
+      "room-4",
+      "room-5"
+    ],
+    "room-7": [
+      "room-5",
+      "room-8"
+    ],
+    "room-8": [
+      "room-7",
+      "room-9"
+    ],
+    "room-9": [
+      "room-8"
+    ]
   },
   "roomSpawns": {
-    "room-1": [{ "monsterTypeId": "skeleton", "count": 2 }],
-    "room-3": [{ "monsterTypeId": "zombie",   "count": 2 }],
-    "room-5": [{ "monsterTypeId": "skeleton", "count": 3 }],
-    "room-7": [{ "monsterTypeId": "mummy",    "count": 1 }],
-    "room-9": [{ "monsterTypeId": "zombie",   "count": 2 }]
+    "room-1": [
+      {
+        "monsterTypeId": "skeleton",
+        "count": 2
+      }
+    ],
+    "room-3": [
+      {
+        "monsterTypeId": "zombie",
+        "count": 2
+      }
+    ],
+    "room-5": [
+      {
+        "monsterTypeId": "skeleton",
+        "count": 3
+      }
+    ],
+    "room-7": [
+      {
+        "monsterTypeId": "mummy",
+        "count": 1
+      }
+    ],
+    "room-9": [
+      {
+        "monsterTypeId": "zombie",
+        "count": 2
+      }
+    ]
   },
   "flags": {},
-  "specialRuleTags": ["undead_only"]
+  "specialRuleTags": [
+    "undead_only"
+  ]
 }

@@ -1,27 +1,83 @@
 {
   "id": "base-10",
   "packId": "BASE",
-  "number": 10,
-  "title": "The Witch Lord's Domain",
   "roomGraph": {
-    "room-1": ["room-2"],
-    "room-2": ["room-1", "room-3", "room-4"],
-    "room-3": ["room-2", "room-5"],
-    "room-4": ["room-2", "room-6"],
-    "room-5": ["room-3", "room-7"],
-    "room-6": ["room-4", "room-7", "room-8"],
-    "room-7": ["room-5", "room-6"],
-    "room-8": ["room-6", "room-9"],
-    "room-9": ["room-8", "room-10"],
-    "room-10": ["room-9"]
+    "room-1": [
+      "room-2"
+    ],
+    "room-2": [
+      "room-1",
+      "room-3",
+      "room-4"
+    ],
+    "room-3": [
+      "room-2",
+      "room-5"
+    ],
+    "room-4": [
+      "room-2",
+      "room-6"
+    ],
+    "room-5": [
+      "room-3",
+      "room-7"
+    ],
+    "room-6": [
+      "room-4",
+      "room-7",
+      "room-8"
+    ],
+    "room-7": [
+      "room-5",
+      "room-6"
+    ],
+    "room-8": [
+      "room-6",
+      "room-9"
+    ],
+    "room-9": [
+      "room-8",
+      "room-10"
+    ],
+    "room-10": [
+      "room-9"
+    ]
   },
   "roomSpawns": {
-    "room-2":  [{ "monsterTypeId": "chaos_warrior", "count": 2 }],
-    "room-4":  [{ "monsterTypeId": "mummy",          "count": 2 }],
-    "room-6":  [{ "monsterTypeId": "gargoyle",       "count": 2 }],
-    "room-8":  [{ "monsterTypeId": "chaos_warrior", "count": 2 }],
-    "room-10": [{ "monsterTypeId": "witch_lord",    "count": 1 }]
+    "room-2": [
+      {
+        "monsterTypeId": "chaos_warrior",
+        "count": 2
+      }
+    ],
+    "room-4": [
+      {
+        "monsterTypeId": "mummy",
+        "count": 2
+      }
+    ],
+    "room-6": [
+      {
+        "monsterTypeId": "gargoyle",
+        "count": 2
+      }
+    ],
+    "room-8": [
+      {
+        "monsterTypeId": "chaos_warrior",
+        "count": 2
+      }
+    ],
+    "room-10": [
+      {
+        "monsterTypeId": "witch_lord",
+        "count": 1
+      }
+    ]
   },
   "flags": {},
-  "specialRuleTags": ["boss_room", "final_quest"]
+  "specialRuleTags": [
+    "boss_room",
+    "final_quest"
+  ]
 }

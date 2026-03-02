@@ -1,26 +1,76 @@
 {
   "id": "base-1",
   "packId": "BASE",
-  "number": 1,
-  "title": "The Trial",
   "roomGraph": {
-    "room-1": ["room-2"],
-    "room-2": ["room-1", "room-3", "room-4"],
-    "room-3": ["room-2"],
-    "room-4": ["room-2", "room-5"],
-    "room-5": ["room-4", "room-6", "room-7"],
-    "room-6": ["room-5"],
-    "room-7": ["room-5", "room-8"],
-    "room-8": ["room-7", "room-9"],
-    "room-9": ["room-8"]
+    "room-1": [
+      "room-2"
+    ],
+    "room-2": [
+      "room-1",
+      "room-3",
+      "room-4"
+    ],
+    "room-3": [
+      "room-2"
+    ],
+    "room-4": [
+      "room-2",
+      "room-5"
+    ],
+    "room-5": [
+      "room-4",
+      "room-6",
+      "room-7"
+    ],
+    "room-6": [
+      "room-5"
+    ],
+    "room-7": [
+      "room-5",
+      "room-8"
+    ],
+    "room-8": [
+      "room-7",
+      "room-9"
+    ],
+    "room-9": [
+      "room-8"
+    ]
   },
   "roomSpawns": {
-    "room-1": [{ "monsterTypeId": "goblin", "count": 2 }],
-    "room-3": [{ "monsterTypeId": "goblin", "count": 1 }],
-    "room-5": [{ "monsterTypeId": "orc",    "count": 1 }],
-    "room-7": [{ "monsterTypeId": "goblin", "count": 2 }],
-    "room-9": [{ "monsterTypeId": "orc",    "count": 1 }]
+    "room-1": [
+      {
+        "monsterTypeId": "goblin",
+        "count": 2
+      }
+    ],
+    "room-3": [
+      {
+        "monsterTypeId": "goblin",
+        "count": 1
+      }
+    ],
+    "room-5": [
+      {
+        "monsterTypeId": "orc",
+        "count": 1
+      }
+    ],
+    "room-7": [
+      {
+        "monsterTypeId": "goblin",
+        "count": 2
+      }
+    ],
+    "room-9": [
+      {
+        "monsterTypeId": "orc",
+        "count": 1
+      }
+    ]
   },
   "flags": {},
-  "specialRuleTags": ["intro_quest"]
+  "specialRuleTags": [
+    "intro_quest"
+  ]
 }

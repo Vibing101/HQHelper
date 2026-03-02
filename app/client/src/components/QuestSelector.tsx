@@ -1,4 +1,4 @@
-import { QUESTS } from "@hq/shared";
+import { QUESTS, getQuestDisplayTitle, getQuestNumberFromId } from "@hq/shared";
 import type { Campaign } from "@hq/shared";
 
 interface Props {
@@ -52,9 +52,9 @@ export default function QuestSelector({ campaign, onSelectQuest, selectedQuestId
                     }`}
                   >
                     <span className="text-xs w-6 text-center">
-                      {status === "completed" ? "✓" : status === "locked" ? "🔒" : `${q.number}`}
+                      {status === "completed" ? "✓" : status === "locked" ? "🔒" : `${getQuestNumberFromId(q.id) ?? "?"}`}
                     </span>
-                    <span className="flex-1 truncate">{q.title}</span>
+                    <span className="flex-1 truncate">{getQuestDisplayTitle(q)}</span>
                     {status === "completed" && (
                       <span className="text-xs text-hq-green">Done</span>
                     )}

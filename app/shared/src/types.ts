@@ -77,8 +77,6 @@ export type SpawnRule = { monsterTypeId: string; count: number };
 export type Quest = {
   id: string;
   packId: PackId;
-  number: number;
-  title: string;
   flags?: QuestFlags;
   roomSpawns?: Record<string, SpawnRule[]>;
   // roomId → adjacent roomIds (placeholder — verify against physical questbook)
@@ -86,6 +84,20 @@ export type Quest = {
   // Engine-level behaviour tags (no copyrighted text)
   specialRuleTags?: string[];
 };
+
+export function getQuestNumberFromId(questId: string): number | null {
+  const m = /-(\d+)$/.exec(questId);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
+export function getQuestDisplayTitle(quest: Pick<Quest, "id" | "packId">): string {
+  const n = getQuestNumberFromId(quest.id);
+  const packLabel = quest.packId === "DREAD_MOON" ? "Dread Moon" : "Base";
+  if (n !== null) return `${packLabel} Quest ${n}`;
+  return `${packLabel} Quest`;
+}
 
 // ─── Effective Rules ──────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
-import { GEAR_CATALOG, ITEM_CATALOG, QUESTS, MONSTER_TYPES, resolveEffectiveRules, formatDiceRollSummary, getHitRuleReminder } from "@hq/shared";
+import { GEAR_CATALOG, ITEM_CATALOG, QUESTS, MONSTER_TYPES, resolveEffectiveRules, formatDiceRollSummary, getHitRuleReminder, getQuestDisplayTitle } from "@hq/shared";
 import type { CombatDieFace, EquipSlot } from "@hq/shared";
 import type { Campaign, Hero, Session, Party, MercenaryTypeId } from "@hq/shared";
 import { joinSession, onDiceRoll, onError, onStateUpdate, sendCommand } from "../socket";
@@ -317,7 +317,10 @@ export default function GMDashboard() {
                 <div>
                   <p className="text-sm text-parchment/70 mb-1">Selected Quest</p>
                   <p className="font-bold text-hq-amber">
-                    {QUESTS.find((q) => q.id === selectedQuestId)?.title}
+                    {(() => {
+                      const quest = QUESTS.find((q) => q.id === selectedQuestId);
+                      return quest ? getQuestDisplayTitle(quest) : "";
+                    })()}
                   </p>
                   {(() => {
                     const quest = QUESTS.find((q) => q.id === selectedQuestId);

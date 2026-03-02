@@ -1,25 +1,77 @@
 {
   "id": "base-3",
   "packId": "BASE",
-  "number": 3,
-  "title": "Bastion of Evil",
   "roomGraph": {
-    "room-1": ["room-2", "room-3"],
-    "room-2": ["room-1", "room-4"],
-    "room-3": ["room-1", "room-5"],
-    "room-4": ["room-2", "room-6"],
-    "room-5": ["room-3", "room-6", "room-7"],
-    "room-6": ["room-4", "room-5", "room-8"],
-    "room-7": ["room-5", "room-9"],
-    "room-8": ["room-6", "room-9"],
-    "room-9": ["room-7", "room-8"]
+    "room-1": [
+      "room-2",
+      "room-3"
+    ],
+    "room-2": [
+      "room-1",
+      "room-4"
+    ],
+    "room-3": [
+      "room-1",
+      "room-5"
+    ],
+    "room-4": [
+      "room-2",
+      "room-6"
+    ],
+    "room-5": [
+      "room-3",
+      "room-6",
+      "room-7"
+    ],
+    "room-6": [
+      "room-4",
+      "room-5",
+      "room-8"
+    ],
+    "room-7": [
+      "room-5",
+      "room-9"
+    ],
+    "room-8": [
+      "room-6",
+      "room-9"
+    ],
+    "room-9": [
+      "room-7",
+      "room-8"
+    ]
   },
   "roomSpawns": {
-    "room-1": [{ "monsterTypeId": "orc",            "count": 2 }],
-    "room-3": [{ "monsterTypeId": "goblin",         "count": 2 }],
-    "room-5": [{ "monsterTypeId": "orc",            "count": 2 }],
-    "room-7": [{ "monsterTypeId": "chaos_warrior", "count": 1 }],
-    "room-9": [{ "monsterTypeId": "orc",            "count": 1 }]
+    "room-1": [
+      {
+        "monsterTypeId": "orc",
+        "count": 2
+      }
+    ],
+    "room-3": [
+      {
+        "monsterTypeId": "goblin",
+        "count": 2
+      }
+    ],
+    "room-5": [
+      {
+        "monsterTypeId": "orc",
+        "count": 2
+      }
+    ],
+    "room-7": [
+      {
+        "monsterTypeId": "chaos_warrior",
+        "count": 1
+      }
+    ],
+    "room-9": [
+      {
+        "monsterTypeId": "orc",
+        "count": 1
+      }
+    ]
   },
   "flags": {},
   "specialRuleTags": []
