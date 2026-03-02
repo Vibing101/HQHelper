@@ -6,6 +6,7 @@ import { HeroModel } from "../models/Hero";
 import { SessionModel } from "../models/Session";
 import { docToJson } from "../utils/docToJson";
 import { ensureHeroStateShape } from "../utils/heroState";
+import { ensureSessionStateShape } from "../utils/sessionState";
 
 export async function buildSnapshotForSocket(socket: Socket, preferredSessionId?: string): Promise<StateSnapshot> {
   const campaignId = socket.data.campaignId as string;
@@ -29,6 +30,9 @@ export async function buildSnapshotForSocket(socket: Socket, preferredSessionId?
 
   const sessionId = preferredSessionId ?? (socket.data.sessionId as string | undefined) ?? campaign?.currentSessionId;
   const rawSession = sessionId ? await SessionModel.findById(sessionId) : null;
+  if (rawSession && ensureSessionStateShape(rawSession)) {
+    await rawSession.save();
+  }
   const session = rawSession && rawSession.campaignId === campaignId ? rawSession : null;
 
   return {

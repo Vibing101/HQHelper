@@ -37,6 +37,7 @@ const SessionSchema = new Schema<SessionDoc>(
     rooms: [RoomStateSchema],
     monsters: [MonsterInstanceSchema],
     rulesSnapshot: { type: Schema.Types.Mixed, required: true },
+    sessionFlags: { type: Schema.Types.Mixed, default: {} },
   },
   { timestamps: false }
 );

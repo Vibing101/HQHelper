@@ -9,6 +9,7 @@ import { MONSTER_TYPES, QUESTS, GEAR_CATALOG, ITEM_CATALOG, HERO_SPELL_ACCESS, A
 import type { PackId } from "@hq/shared";
 import { docToJson } from "../utils/docToJson";
 import { ensureHeroStateShape } from "../utils/heroState";
+import { ensureSessionStateShape } from "../utils/sessionState";
 import { buildSnapshotForSocket } from "./snapshot";
 
 const nanoidEquip = customAlphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
@@ -140,6 +141,7 @@ async function getSessionRules(campaignId: string, socketSessionId?: string): Pr
   if (sessionId) {
     const session = await SessionModel.findById(sessionId);
     if (session && session.campaignId === campaignId) {
+      if (ensureSessionStateShape(session)) await session.save();
       return session.rulesSnapshot as unknown as EffectiveRules;
     }
   }
@@ -148,7 +150,10 @@ async function getSessionRules(campaignId: string, socketSessionId?: string): Pr
   if (!campaign) return null;
   if (campaign.currentSessionId) {
     const active = await SessionModel.findById(campaign.currentSessionId);
-    if (active) return active.rulesSnapshot as unknown as EffectiveRules;
+    if (active) {
+      if (ensureSessionStateShape(active)) await active.save();
+      return active.rulesSnapshot as unknown as EffectiveRules;
+    }
   }
   return resolveEffectiveRules(campaign.enabledPacks as PackId[]);
 }
@@ -203,6 +208,7 @@ async function handleAdjustPoints(io: Server, socket: Socket, cmd: Extract<Socke
     const sessionId = socket.data.sessionId as string;
     const session = await SessionModel.findById(sessionId);
     if (!session) return socket.emit("error", { message: "Session not found" });
+    if (ensureSessionStateShape(session)) await session.save();
     if (session.campaignId !== socket.data.campaignId) {
       return socket.emit("error", { message: "Forbidden: session is not in your campaign" });
     }
@@ -230,6 +236,7 @@ async function handleSelectHero(io: Server, socket: Socket, cmd: Extract<SocketC
   }
   const session = await SessionModel.findById(sessionId);
   if (!session) return socket.emit("error", { message: "Session not found" });
+  if (ensureSessionStateShape(session)) await session.save();
   if (session.campaignId !== socket.data.campaignId) {
     return socket.emit("error", { message: "Forbidden: session is not in your campaign" });
   }
@@ -308,6 +315,7 @@ async function handleSetRoomState(io: Server, socket: Socket, cmd: Extract<Socke
   const { sessionId, roomId, state } = cmd;
   const session = await SessionModel.findById(sessionId);
   if (!session) return socket.emit("error", { message: "Session not found" });
+  if (ensureSessionStateShape(session)) await session.save();
   if (session.campaignId !== socket.data.campaignId) {
     return socket.emit("error", { message: "Forbidden: session is not in your campaign" });
   }
@@ -403,6 +411,7 @@ async function handleSpawnMonster(io: Server, socket: Socket, cmd: Extract<Socke
 
   const session = await SessionModel.findById(sessionId);
   if (!session) return socket.emit("error", { message: "Session not found" });
+  if (ensureSessionStateShape(session)) await session.save();
   if (session.campaignId !== socket.data.campaignId) {
     return socket.emit("error", { message: "Forbidden: session is not in your campaign" });
   }
@@ -430,6 +439,7 @@ async function handleRemoveMonster(io: Server, socket: Socket, cmd: Extract<Sock
   const { sessionId, monsterId } = cmd;
   const session = await SessionModel.findById(sessionId);
   if (!session) return socket.emit("error", { message: "Session not found" });
+  if (ensureSessionStateShape(session)) await session.save();
   if (session.campaignId !== socket.data.campaignId) {
     return socket.emit("error", { message: "Forbidden: session is not in your campaign" });
   }
@@ -619,6 +629,7 @@ async function handleStartSession(io: Server, socket: Socket, cmd: Extract<Socke
     rooms: [],
     monsters: [],
     rulesSnapshot,
+    sessionFlags: {},
   });
 
   await CampaignModel.findByIdAndUpdate(campaignId, { currentSessionId: session._id.toString() });
@@ -935,6 +946,7 @@ async function handleSetMonsterStatus(io: Server, socket: Socket, cmd: Extract<S
   }
   const session = await SessionModel.findById(cmd.sessionId);
   if (!session) return socket.emit("error", { message: "Session not found" });
+  if (ensureSessionStateShape(session)) await session.save();
   if (session.campaignId !== socket.data.campaignId) {
     return socket.emit("error", { message: "Forbidden: session is not in your campaign" });
   }

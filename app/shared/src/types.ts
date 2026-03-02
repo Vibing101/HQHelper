@@ -178,6 +178,7 @@ export type Session = {
   rooms: RoomState[];
   monsters: MonsterInstance[];
   rulesSnapshot: EffectiveRules;
+  sessionFlags: Record<string, boolean | number | string>;
 };
 
 // ─── Equipment Model ──────────────────────────────────────────────────────────
