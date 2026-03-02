@@ -1,3 +1,5 @@
+export * from "./engine/dice";
+
 // ─── Pack & System IDs ──────────────────────────────────────────────────────
 
 export type PackId = "BASE" | "DREAD_MOON";
@@ -269,7 +271,7 @@ export type RollDiceCommand = {
   type: "ROLL_DICE";
   rollType: "attack" | "defense";
   diceCount: number;
-  results: ("skull" | "shield")[];
+  results: CombatDieFace[];
   rollerName: string;
 };
 

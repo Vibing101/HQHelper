@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
-import { GEAR_CATALOG, QUESTS, MONSTER_TYPES, resolveEffectiveRules } from "@hq/shared";
+import { GEAR_CATALOG, QUESTS, MONSTER_TYPES, resolveEffectiveRules, countHitsForHeroAttack, countBlocksForHeroDefense } from "@hq/shared";
+import type { CombatDieFace } from "@hq/shared";
 import type { Campaign, Hero, Session } from "@hq/shared";
 import { joinSession, onDiceRoll, onStateUpdate, sendCommand } from "../socket";
 import { authFetch } from "../api";
@@ -116,10 +117,13 @@ export default function GMDashboard() {
   // Dice roll toast listener
   useEffect(() => {
     const unsub = onDiceRoll((roll) => {
-      const skulls = roll.results.filter((r) => r === "skull").length;
-      const shields = roll.results.filter((r) => r === "shield").length;
-      const icons = roll.results.map((r) => (r === "skull" ? (roll.rollType === "attack" ? "⚔️" : "💀") : "🛡️")).join(" ");
-      const msg = `${roll.rollerName} rolled ${roll.rollType}: ${icons} — ${skulls} ${roll.rollType === "attack" ? "hit(s)" : "wound(s)"}, ${shields} block(s)`;
+      const faces = roll.results as CombatDieFace[];
+      const hits = countHitsForHeroAttack(faces);
+      const blocks = countBlocksForHeroDefense(faces);
+      const icons = faces.map((f) => f === "skull" ? "💀" : f === "whiteShield" ? "🛡️" : "⬛").join(" ");
+      const msg = roll.rollType === "attack"
+        ? `${roll.rollerName} attacked: ${icons} — ${hits} hit(s)`
+        : `${roll.rollerName} defended: ${icons} — ${blocks} block(s)`;
       setDiceToast(msg);
       if (toastTimer.current) clearTimeout(toastTimer.current);
       toastTimer.current = setTimeout(() => setDiceToast(null), 5000);

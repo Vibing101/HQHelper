@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import type { Hero } from "@hq/shared";
-import { ALL_SPELL_ELEMENTS, GEAR_CATALOG, HERO_SPELL_ACCESS, SPELLS } from "@hq/shared";
+import { ALL_SPELL_ELEMENTS, GEAR_CATALOG, HERO_SPELL_ACCESS, SPELLS, rollCombatDice, countHitsForHeroAttack, countBlocksForHeroDefense } from "@hq/shared";
 import type { SpellElement } from "@hq/shared";
 import { joinSession, onDiceRoll, onStateUpdate, sendCommand } from "../socket";
 import StatAdjuster from "../components/StatAdjuster";
@@ -104,10 +104,13 @@ export default function PlayerSheet() {
 
   useEffect(() => {
     const unsub = onDiceRoll((roll) => {
-      const skulls = roll.results.filter((r) => r === "skull").length;
-      const shields = roll.results.filter((r) => r === "shield").length;
-      const icons = roll.results.map((r) => (r === "skull" ? (roll.rollType === "attack" ? "⚔️" : "💀") : "🛡️")).join(" ");
-      const msg = `${roll.rollerName} rolled ${roll.rollType}: ${icons} — ${skulls} ${roll.rollType === "attack" ? "hit(s)" : "wound(s)"}, ${shields} block(s)`;
+      const faces = roll.results as import("@hq/shared").CombatDieFace[];
+      const hits = countHitsForHeroAttack(faces);
+      const blocks = countBlocksForHeroDefense(faces);
+      const icons = faces.map((f) => f === "skull" ? "💀" : f === "whiteShield" ? "🛡️" : "⬛").join(" ");
+      const msg = roll.rollType === "attack"
+        ? `${roll.rollerName} attacked: ${icons} — ${hits} hit(s)`
+        : `${roll.rollerName} defended: ${icons} — ${blocks} block(s)`;
       setDiceToast(msg);
       if (toastTimer.current) clearTimeout(toastTimer.current);
       toastTimer.current = setTimeout(() => setDiceToast(null), 5000);
@@ -150,11 +153,7 @@ export default function PlayerSheet() {
     const effectiveAttack = hero.attackDice + hero.equipment.reduce((s, e) => s + (e.attackBonus ?? 0), 0);
     const effectiveDefend = hero.defendDice + hero.equipment.reduce((s, e) => s + (e.defendBonus ?? 0), 0);
     const diceCount = rollType === "attack" ? effectiveAttack : effectiveDefend;
-    // Attack die: ~50% skull. Defense die: ~33% skull.
-    const skullChance = rollType === "attack" ? 0.5 : 1 / 3;
-    const results: ("skull" | "shield")[] = Array.from({ length: diceCount }, () =>
-      Math.random() < skullChance ? "skull" : "shield"
-    );
+    const results = rollCombatDice(diceCount);
     sendCommand({ type: "ROLL_DICE", rollType, diceCount, results, rollerName: hero.name });
   }
 
