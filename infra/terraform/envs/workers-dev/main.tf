@@ -9,12 +9,6 @@ locals {
   ]))
 }
 
-data "cloudflare_zone" "savvy_des" {
-  filter = {
-    name = var.cf_zone_name
-  }
-}
-
 resource "cloudflare_d1_database" "hq_helper" {
   account_id            = var.cloudflare_account_id
   name                  = var.d1_name
@@ -125,7 +119,7 @@ resource "cloudflare_workers_deployment" "hq_helper" {
 resource "cloudflare_workers_custom_domain" "hq_helper" {
   account_id  = var.cloudflare_account_id
   environment = var.worker_environment
-  zone_id     = data.cloudflare_zone.savvy_des.id
+  zone_id     = var.cloudflare_zone_id
   hostname    = local.worker_hostname
   service     = cloudflare_worker.hq_helper.name
 }
