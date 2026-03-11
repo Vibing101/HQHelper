@@ -65,6 +65,21 @@ resource "cloudflare_worker_version" "hq_helper" {
       name         = "index.mjs"
       content_file = local.worker_entry
       content_type = "application/javascript+module"
+    },
+    {
+      name         = "auth.mjs"
+      content_file = "${local.worker_root}/src/auth.mjs"
+      content_type = "application/javascript+module"
+    },
+    {
+      name         = "data.mjs"
+      content_file = "${local.worker_root}/src/data.mjs"
+      content_type = "application/javascript+module"
+    },
+    {
+      name         = "repository.mjs"
+      content_file = "${local.worker_root}/src/repository.mjs"
+      content_type = "application/javascript+module"
     }
   ]
 }

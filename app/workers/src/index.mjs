@@ -1,3 +1,16 @@
+import { requireToken, signToken } from "./auth.mjs";
+import { HERO_BASE_STATS, QUESTS } from "./data.mjs";
+import {
+  createId,
+  createJoinCode,
+  getCampaignById,
+  getCampaignByJoinCode,
+  getHeroById,
+  getPartyById,
+  getSessionById,
+  listHeroesByCampaign,
+} from "./repository.mjs";
+
 const APP_TITLE = "HQ Helper";
 
 function json(data, init = {}) {
@@ -10,6 +23,257 @@ function html(body, init = {}) {
   const headers = new Headers(init.headers);
   headers.set("content-type", "text/html; charset=utf-8");
   return new Response(body, { ...init, headers });
+}
+
+function error(message, status = 400, init = {}) {
+  return json({ error: message }, { ...init, status });
+}
+
+async function readJson(request) {
+  try {
+    return await request.json();
+  } catch {
+    return null;
+  }
+}
+
+async function ensureUniqueJoinCode(db) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const joinCode = createJoinCode();
+    const existing = await db.prepare("SELECT id FROM campaigns WHERE join_code = ?").bind(joinCode).first();
+    if (!existing) return joinCode;
+  }
+  throw new Error("Failed to generate unique join code");
+}
+
+async function handleCreateCampaign(request, env) {
+  const body = await readJson(request);
+  const name = body?.name?.trim();
+  const enabledPacks = Array.isArray(body?.enabledPacks) ? body.enabledPacks : [];
+
+  if (!name || enabledPacks.length === 0) {
+    return error("name and enabledPacks are required", 400);
+  }
+
+  const campaignId = createId("campaign");
+  const partyId = createId("party");
+  const joinCode = await ensureUniqueJoinCode(env.DB);
+  const createdAt = new Date().toISOString();
+  const questLog = QUESTS
+    .filter((quest) => enabledPacks.includes(quest.packId))
+    .map((quest, index) => ({
+      questId: quest.id,
+      status: index === 0 ? "available" : "locked",
+      completedAt: null,
+    }));
+
+  await env.DB.batch([
+    env.DB
+      .prepare(
+        `INSERT INTO parties (
+          id, campaign_id, reputation_tokens, unlocked_mercenary_types, mercenaries_json
+        ) VALUES (?, ?, 0, '[]', '[]')`
+      )
+      .bind(partyId, campaignId),
+    env.DB
+      .prepare(
+        `INSERT INTO campaigns (
+          id, name, join_code, enabled_packs, party_id, current_session_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, NULL, ?)`
+      )
+      .bind(campaignId, name, joinCode, JSON.stringify(enabledPacks), partyId, createdAt),
+    ...questLog.map((entry) =>
+      env.DB
+        .prepare(
+          `INSERT INTO quest_log (campaign_id, quest_id, status, completed_at)
+           VALUES (?, ?, ?, ?)`
+        )
+        .bind(campaignId, entry.questId, entry.status, entry.completedAt)
+    ),
+  ]);
+
+  const campaign = await getCampaignById(env.DB, campaignId);
+  const token = await signToken(env, { campaignId, role: "gm" });
+  return json({ campaign, joinCode, token }, { status: 201 });
+}
+
+async function handleJoinCampaign(url, env) {
+  const code = url.pathname.split("/").pop()?.toUpperCase() ?? "";
+  const playerId = url.searchParams.get("playerId")?.trim();
+
+  if (!playerId) {
+    return error("playerId query parameter is required", 400);
+  }
+
+  const campaign = await getCampaignByJoinCode(env.DB, code);
+  if (!campaign) {
+    return error("Campaign not found", 404);
+  }
+
+  const token = await signToken(env, {
+    campaignId: campaign.id,
+    role: "player",
+    playerId,
+  });
+
+  return json({ campaign, token });
+}
+
+async function handleGetCampaign(url, env) {
+  const campaignId = url.pathname.split("/").pop();
+  const campaign = await getCampaignById(env.DB, campaignId);
+  if (!campaign) {
+    return error("Not found", 404);
+  }
+  return json({ campaign });
+}
+
+async function handleCreateHero(request, env) {
+  const auth = await requireToken(request, env, ["player"]);
+  if (auth.error) {
+    return json(auth.error.body, { status: auth.error.status });
+  }
+
+  const body = await readJson(request);
+  const heroTypeId = body?.heroTypeId;
+  const name = body?.name?.trim();
+  const partyId = body?.partyId;
+  const { campaignId, playerId } = auth.payload;
+
+  if (!heroTypeId || !name) {
+    return error("heroTypeId and name are required", 400);
+  }
+  if (!playerId) {
+    return error("Token is missing playerId — re-join the campaign", 400);
+  }
+
+  const stats = HERO_BASE_STATS[heroTypeId];
+  if (!stats) {
+    return error("Invalid heroTypeId", 400);
+  }
+
+  const existing = await env.DB
+    .prepare("SELECT id FROM heroes WHERE campaign_id = ? AND hero_type_id = ?")
+    .bind(campaignId, heroTypeId)
+    .first();
+  if (existing) {
+    return error(`A ${heroTypeId} already exists in this campaign`, 409);
+  }
+
+  const now = new Date().toISOString();
+  const heroId = createId("hero");
+  await env.DB
+    .prepare(
+      `INSERT INTO heroes (
+        id, campaign_id, party_id, player_id, hero_type_id, name,
+        body_points_max, body_points_current, mind_points_max, mind_points_current,
+        attack_dice, defend_dice, gold, equipped_json, inventory_json, consumables_json,
+        artifacts_json, alchemy_json, spells_json, status_flags_json,
+        hideout_rest_used_this_quest, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
+    )
+    .bind(
+      heroId,
+      campaignId,
+      partyId ?? null,
+      playerId,
+      heroTypeId,
+      name,
+      stats.bodyPointsMax,
+      stats.bodyPointsMax,
+      stats.mindPointsMax,
+      stats.mindPointsMax,
+      stats.attackDice,
+      stats.defendDice,
+      JSON.stringify({}),
+      JSON.stringify([]),
+      JSON.stringify([]),
+      JSON.stringify([]),
+      JSON.stringify({ reagents: [], potions: [] }),
+      JSON.stringify([]),
+      JSON.stringify({
+        isDead: false,
+        isInShock: false,
+        isDisguised: false,
+        hasDisguiseToken: false,
+      }),
+      now,
+      now,
+    )
+    .run();
+
+  const hero = await getHeroById(env.DB, heroId);
+  const token = await signToken(env, { campaignId, role: "player", playerId, heroId });
+  return json({ hero, token }, { status: 201 });
+}
+
+async function handleClaimHero(request, url, env) {
+  const auth = await requireToken(request, env, ["player"]);
+  if (auth.error) {
+    return json(auth.error.body, { status: auth.error.status });
+  }
+
+  const heroId = url.pathname.split("/")[3];
+  const { campaignId, playerId } = auth.payload;
+  if (!playerId) {
+    return error("Token is missing playerId — re-join the campaign", 400);
+  }
+
+  const hero = await getHeroById(env.DB, heroId);
+  if (!hero) {
+    return error("Hero not found", 404);
+  }
+  if (hero.campaignId !== campaignId) {
+    return error("Forbidden: hero is not in your campaign", 403);
+  }
+  if (hero.playerId && hero.playerId !== playerId) {
+    return error("Forbidden: hero belongs to a different player", 403);
+  }
+
+  if (!hero.playerId) {
+    const now = new Date().toISOString();
+    await env.DB
+      .prepare("UPDATE heroes SET player_id = ?, updated_at = ? WHERE id = ?")
+      .bind(playerId, now, heroId)
+      .run();
+  }
+
+  const freshHero = await getHeroById(env.DB, heroId);
+  const token = await signToken(env, { campaignId, role: "player", playerId, heroId });
+  return json({ hero: freshHero, token });
+}
+
+async function handleListCampaignHeroes(url, env) {
+  const campaignId = url.pathname.split("/").pop();
+  const heroes = await listHeroesByCampaign(env.DB, campaignId);
+  return json({ heroes });
+}
+
+async function handleGetHero(url, env) {
+  const heroId = url.pathname.split("/").pop();
+  const hero = await getHeroById(env.DB, heroId);
+  if (!hero) {
+    return error("Not found", 404);
+  }
+  return json({ hero });
+}
+
+async function handleGetParty(url, env) {
+  const partyId = url.pathname.split("/").pop();
+  const party = await getPartyById(env.DB, partyId);
+  if (!party) {
+    return error("Not found", 404);
+  }
+  return json({ party });
+}
+
+async function handleGetSession(url, env) {
+  const sessionId = url.pathname.split("/").pop();
+  const session = await getSessionById(env.DB, sessionId);
+  if (!session) {
+    return error("Not found", 404);
+  }
+  return json({ session });
 }
 
 async function checkDatabase(env) {
@@ -207,6 +471,42 @@ function renderHome(env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    if (request.method === "POST" && url.pathname === "/api/campaigns") {
+      return handleCreateCampaign(request, env);
+    }
+
+    if (request.method === "GET" && /^\/api\/campaigns\/join\/[^/]+$/.test(url.pathname)) {
+      return handleJoinCampaign(url, env);
+    }
+
+    if (request.method === "GET" && /^\/api\/campaigns\/[^/]+$/.test(url.pathname)) {
+      return handleGetCampaign(url, env);
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/heroes") {
+      return handleCreateHero(request, env);
+    }
+
+    if (request.method === "POST" && /^\/api\/heroes\/[^/]+\/claim$/.test(url.pathname)) {
+      return handleClaimHero(request, url, env);
+    }
+
+    if (request.method === "GET" && /^\/api\/heroes\/campaign\/[^/]+$/.test(url.pathname)) {
+      return handleListCampaignHeroes(url, env);
+    }
+
+    if (request.method === "GET" && /^\/api\/heroes\/[^/]+$/.test(url.pathname)) {
+      return handleGetHero(url, env);
+    }
+
+    if (request.method === "GET" && /^\/api\/parties\/[^/]+$/.test(url.pathname)) {
+      return handleGetParty(url, env);
+    }
+
+    if (request.method === "GET" && /^\/api\/sessions\/[^/]+$/.test(url.pathname)) {
+      return handleGetSession(url, env);
+    }
 
     if (url.pathname === "/api/health") {
       const database = await checkDatabase(env);
