@@ -122,8 +122,15 @@ async function handleJoinCampaign(url, env) {
   return json({ campaign, token });
 }
 
-async function handleGetCampaign(url, env) {
+async function handleGetCampaign(request, url, env) {
+  const auth = await requireToken(request, env);
+  if (auth.error) {
+    return json(auth.error.body, { status: auth.error.status });
+  }
   const campaignId = url.pathname.split("/").pop();
+  if (auth.payload.campaignId !== campaignId) {
+    return error("Forbidden: token is not scoped to this campaign", 403);
+  }
   const campaign = await getCampaignById(env.DB, campaignId);
   if (!campaign) {
     return error("Not found", 404);
@@ -246,35 +253,63 @@ async function handleClaimHero(request, url, env) {
   return json({ hero: freshHero, token });
 }
 
-async function handleListCampaignHeroes(url, env) {
+async function handleListCampaignHeroes(request, url, env) {
+  const auth = await requireToken(request, env);
+  if (auth.error) {
+    return json(auth.error.body, { status: auth.error.status });
+  }
   const campaignId = url.pathname.split("/").pop();
+  if (auth.payload.campaignId !== campaignId) {
+    return error("Forbidden: token is not scoped to this campaign", 403);
+  }
   const heroes = await listHeroesByCampaign(env.DB, campaignId);
   return json({ heroes });
 }
 
-async function handleGetHero(url, env) {
+async function handleGetHero(request, url, env) {
+  const auth = await requireToken(request, env);
+  if (auth.error) {
+    return json(auth.error.body, { status: auth.error.status });
+  }
   const heroId = url.pathname.split("/").pop();
   const hero = await getHeroById(env.DB, heroId);
   if (!hero) {
     return error("Not found", 404);
   }
+  if (hero.campaignId !== auth.payload.campaignId) {
+    return error("Forbidden: hero is not in your campaign", 403);
+  }
   return json({ hero });
 }
 
-async function handleGetParty(url, env) {
+async function handleGetParty(request, url, env) {
+  const auth = await requireToken(request, env);
+  if (auth.error) {
+    return json(auth.error.body, { status: auth.error.status });
+  }
   const partyId = url.pathname.split("/").pop();
   const party = await getPartyById(env.DB, partyId);
   if (!party) {
     return error("Not found", 404);
   }
+  if (party.campaignId !== auth.payload.campaignId) {
+    return error("Forbidden: party is not in your campaign", 403);
+  }
   return json({ party });
 }
 
-async function handleGetSession(url, env) {
+async function handleGetSession(request, url, env) {
+  const auth = await requireToken(request, env);
+  if (auth.error) {
+    return json(auth.error.body, { status: auth.error.status });
+  }
   const sessionId = url.pathname.split("/").pop();
   const session = await getSessionById(env.DB, sessionId);
   if (!session) {
     return error("Not found", 404);
+  }
+  if (session.campaignId !== auth.payload.campaignId) {
+    return error("Forbidden: session is not in your campaign", 403);
   }
   return json({ session });
 }
@@ -564,7 +599,7 @@ export default {
     }
 
     if (request.method === "GET" && /^\/api\/campaigns\/[^/]+$/.test(url.pathname)) {
-      return handleGetCampaign(url, env);
+      return handleGetCampaign(request, url, env);
     }
 
     if (request.method === "POST" && url.pathname === "/api/heroes") {
@@ -576,19 +611,19 @@ export default {
     }
 
     if (request.method === "GET" && /^\/api\/heroes\/campaign\/[^/]+$/.test(url.pathname)) {
-      return handleListCampaignHeroes(url, env);
+      return handleListCampaignHeroes(request, url, env);
     }
 
     if (request.method === "GET" && /^\/api\/heroes\/[^/]+$/.test(url.pathname)) {
-      return handleGetHero(url, env);
+      return handleGetHero(request, url, env);
     }
 
     if (request.method === "GET" && /^\/api\/parties\/[^/]+$/.test(url.pathname)) {
-      return handleGetParty(url, env);
+      return handleGetParty(request, url, env);
     }
 
     if (request.method === "GET" && /^\/api\/sessions\/[^/]+$/.test(url.pathname)) {
-      return handleGetSession(url, env);
+      return handleGetSession(request, url, env);
     }
 
     if (url.pathname === "/api/health") {

@@ -42,6 +42,19 @@ export function mapCampaign(row, questLog) {
   };
 }
 
+export function mapCampaignPublic(row, questLog) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    enabledPacks: parseJson(row.enabled_packs, []),
+    partyId: row.party_id,
+    currentSessionId: row.current_session_id ?? undefined,
+    questLog,
+    createdAt: row.created_at,
+  };
+}
+
 export function mapHero(row) {
   if (!row) return null;
   const statusFlags = parseJson(row.status_flags_json, {});
@@ -131,6 +144,13 @@ export async function getCampaignById(db, campaignId) {
   return mapCampaign(row, questLog);
 }
 
+export async function getCampaignByIdPublic(db, campaignId) {
+  const row = await db.prepare("SELECT * FROM campaigns WHERE id = ?").bind(campaignId).first();
+  if (!row) return null;
+  const questLog = await getQuestLog(db, campaignId);
+  return mapCampaignPublic(row, questLog);
+}
+
 export async function getCampaignByJoinCode(db, joinCode) {
   const row = await db
     .prepare("SELECT * FROM campaigns WHERE join_code = ?")
@@ -172,7 +192,7 @@ export async function getSessionById(db, sessionId) {
 }
 
 export async function buildSnapshot(db, campaignId, preferredSessionId) {
-  const campaign = await getCampaignById(db, campaignId);
+  const campaign = await getCampaignByIdPublic(db, campaignId);
   if (!campaign) {
     return {
       campaign: null,
