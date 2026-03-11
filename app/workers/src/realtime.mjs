@@ -1,7 +1,6 @@
 export class CampaignRealtimeHub {
   constructor(state) {
     this.state = state;
-    this.connections = new Map();
   }
 
   async fetch(request) {
@@ -40,15 +39,13 @@ export class CampaignRealtimeHub {
       const clientId = url.searchParams.get("clientId") ?? crypto.randomUUID();
       const sessionId = url.searchParams.get("sessionId") ?? "";
 
-      server.accept();
-      this.connections.set(clientId, { socket: server, sessionId, payload: ticketData.payload });
+      // Attach per-connection metadata before handing off to the hibernatable API.
+      // serializeAttachment must be called before acceptWebSocket.
+      server.serializeAttachment({ clientId, sessionId, payload: ticketData.payload });
 
-      server.addEventListener("close", () => {
-        this.connections.delete(clientId);
-      });
-      server.addEventListener("error", () => {
-        this.connections.delete(clientId);
-      });
+      // acceptWebSocket registers the socket with the runtime so it survives DO hibernation.
+      // Do NOT call server.accept() — they are mutually exclusive.
+      this.state.acceptWebSocket(server);
 
       server.send(JSON.stringify({ type: "joined" }));
       return new Response(null, { status: 101, webSocket: client });
@@ -63,20 +60,41 @@ export class CampaignRealtimeHub {
     if (request.method === "POST" && url.pathname.endsWith("/broadcast")) {
       const payload = await request.json();
       const encoded = JSON.stringify(payload);
-      for (const [clientId, connection] of this.connections) {
+      // getWebSockets() returns all live sockets managed by the hibernatable API,
+      // including those that were connected before the DO was last evicted.
+      for (const ws of this.state.getWebSockets()) {
         try {
-          if (!payload.sessionId || !connection.sessionId || payload.sessionId === connection.sessionId) {
-            connection.socket.send(encoded);
-          } else if (payload.type === "refresh") {
-            connection.socket.send(encoded);
+          const { sessionId } = ws.deserializeAttachment();
+          // Send to everyone unless both sides have a sessionId that doesn't match,
+          // except "refresh" messages always fan out to all connections.
+          if (
+            !payload.sessionId ||
+            !sessionId ||
+            payload.sessionId === sessionId ||
+            payload.type === "refresh"
+          ) {
+            ws.send(encoded);
           }
         } catch {
-          this.connections.delete(clientId);
+          // Socket may be in a closing/closed state; skip it silently.
         }
       }
       return new Response(null, { status: 204 });
     }
 
     return new Response("Not found", { status: 404 });
+  }
+
+  // Called by the runtime when a message arrives after hibernation wake.
+  // No client-to-server messages are currently defined; ignore silently.
+  webSocketMessage(_ws, _message) {}
+
+  // Called by the runtime when a client closes the connection.
+  // Hibernation cleans up the socket automatically; nothing to do here.
+  webSocketClose(_ws, _code, _reason) {}
+
+  // Called by the runtime when the socket encounters an error.
+  webSocketError(_ws, error) {
+    console.error("WebSocket error:", error);
   }
 }
