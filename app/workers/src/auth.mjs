@@ -32,6 +32,9 @@ async function importSigningKey(secret) {
 function getSecret(env) {
   const secret = env.JWT_SECRET;
   if (secret) return secret;
+  if (env.APP_ENV && env.APP_ENV !== "dev") {
+    throw new Error("JWT_SECRET is not configured");
+  }
   return "dev-secret-change-in-production";
 }
 

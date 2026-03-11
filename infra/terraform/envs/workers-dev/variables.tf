@@ -50,3 +50,9 @@ variable "d1_primary_location_hint" {
   type        = string
   default     = "weur"
 }
+
+variable "jwt_secret" {
+  description = "JWT signing secret for the HQ Helper Worker. Must be set before a real apply."
+  type        = string
+  sensitive   = true
+}

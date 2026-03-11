@@ -1,3 +1,6 @@
+# jwt_secret must be set to a strong random value before running terraform apply.
+# Example: openssl rand -hex 32
+jwt_secret            = "<REPLACE>"
 cloudflare_account_id = "replace-me"
 cf_zone_name          = "savvy-des.com"
 worker_name           = "hq-helper-dev"

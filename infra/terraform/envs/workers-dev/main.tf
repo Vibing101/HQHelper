@@ -62,6 +62,11 @@ resource "cloudflare_worker_version" "hq_helper" {
       type = "plain_text"
       name = "APP_VERSION"
       text = "bootstrap"
+    },
+    {
+      type = "secret_text"
+      name = "JWT_SECRET"
+      text = var.jwt_secret
     }
   ]
 
