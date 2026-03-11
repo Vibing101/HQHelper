@@ -36,23 +36,21 @@ export default function PlayerLobby() {
   const [heroName, setHeroName] = useState("");
   const [creating, setCreating] = useState(false);
 
-  // Derive playerId from sessionStorage (or generate one)
-  const playerId = (() => {
-    let id = sessionStorage.getItem("playerId");
-    if (!id) {
-      id = `player-${Math.random().toString(36).slice(2, 9)}`;
-      sessionStorage.setItem("playerId", id);
-    }
-    return id;
-  })();
+  // playerId is received from the server on join and persisted to sessionStorage
+  const playerId = sessionStorage.getItem("playerId") ?? "";
 
   useEffect(() => {
     if (!code) return;
-    fetch(`/api/campaigns/join/${code}?playerId=${encodeURIComponent(playerId)}`)
+    fetch("/api/campaigns/join", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ joinCode: code }),
+    })
       .then((r) => r.json())
       .then((data) => {
         if (data.error) throw new Error(data.error);
         if (data.token) setToken(data.token);
+        if (data.playerId) sessionStorage.setItem("playerId", data.playerId);
         setCampaign(data.campaign);
         sessionStorage.setItem("campaignId", data.campaign.id);
         // Load existing heroes so players can rejoin
@@ -63,7 +61,7 @@ export default function PlayerLobby() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [code, playerId, setToken]);
+  }, [code, setToken]);
 
   // Compute allowed heroes from the most recent active quest (if any)
   // For lobby, we show all heroes allowed by the campaign's enabled packs

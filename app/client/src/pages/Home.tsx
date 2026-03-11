@@ -75,18 +75,16 @@ export default function Home() {
     if (!code) return;
     setJoining(true);
     try {
-      // Reuse or generate a persistent player ID for this browser / tab
-      let pid = sessionStorage.getItem("playerId");
-      if (!pid) {
-        pid = `player-${Math.random().toString(36).slice(2, 9)}`;
-        sessionStorage.setItem("playerId", pid);
-      }
-
-      const res = await fetch(`/api/campaigns/join/${code}?playerId=${encodeURIComponent(pid)}`);
+      const res = await fetch("/api/campaigns/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ joinCode: code }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Campaign not found");
 
-      // Store the player token issued by the server
+      // Store the server-generated playerId and the player token
+      sessionStorage.setItem("playerId", data.playerId);
       setToken(data.token);
 
       sessionStorage.setItem("campaignId", data.campaign.id);

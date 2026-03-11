@@ -100,18 +100,28 @@ async function handleCreateCampaign(request, env) {
   return json({ campaign, joinCode, token }, { status: 201 });
 }
 
-async function handleJoinCampaign(url, env) {
-  const code = url.pathname.split("/").pop()?.toUpperCase() ?? "";
-  const playerId = url.searchParams.get("playerId")?.trim();
+async function handleJoinCampaign(request, env) {
+  const body = await readJson(request);
+  const joinCode = body?.joinCode?.trim()?.toUpperCase() ?? "";
 
-  if (!playerId) {
-    return error("playerId query parameter is required", 400);
+  if (!joinCode) {
+    return error("joinCode is required", 400);
   }
 
-  const campaign = await getCampaignByJoinCode(env.DB, code);
+  const campaign = await getCampaignByJoinCode(env.DB, joinCode);
   if (!campaign) {
     return error("Campaign not found", 404);
   }
+
+  const playerId = createId("player");
+  const joinedAt = new Date().toISOString();
+
+  await env.DB
+    .prepare(
+      "INSERT INTO campaign_members (campaign_id, player_id, joined_at) VALUES (?, ?, ?)"
+    )
+    .bind(campaign.id, playerId, joinedAt)
+    .run();
 
   const token = await signToken(env, {
     campaignId: campaign.id,
@@ -119,7 +129,7 @@ async function handleJoinCampaign(url, env) {
     playerId,
   });
 
-  return json({ campaign, token });
+  return json({ campaign, playerId, token });
 }
 
 async function handleGetCampaign(request, url, env) {
@@ -227,6 +237,14 @@ async function handleClaimHero(request, url, env) {
   const { campaignId, playerId } = auth.payload;
   if (!playerId) {
     return error("Token is missing playerId — re-join the campaign", 400);
+  }
+
+  const member = await env.DB
+    .prepare("SELECT player_id FROM campaign_members WHERE campaign_id = ? AND player_id = ?")
+    .bind(campaignId, playerId)
+    .first();
+  if (!member) {
+    return error("Forbidden: playerId is not a member of this campaign", 403);
   }
 
   const hero = await getHeroById(env.DB, heroId);
@@ -622,8 +640,8 @@ export default {
       return handleCreateCampaign(request, env);
     }
 
-    if (request.method === "GET" && /^\/api\/campaigns\/join\/[^/]+$/.test(url.pathname)) {
-      return handleJoinCampaign(url, env);
+    if (request.method === "POST" && url.pathname === "/api/campaigns/join") {
+      return handleJoinCampaign(request, env);
     }
 
     if (request.method === "GET" && /^\/api\/campaigns\/[^/]+$/.test(url.pathname)) {
