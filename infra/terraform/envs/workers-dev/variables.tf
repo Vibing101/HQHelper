@@ -27,6 +27,12 @@ variable "worker_environment" {
   default     = "production"
 }
 
+variable "apply_d1_migrations" {
+  description = "Whether terraform apply should invoke Wrangler to apply D1 SQL migrations after the database exists."
+  type        = bool
+  default     = true
+}
+
 variable "worker_subdomain" {
   description = "Subdomain for the Cloudflare Workers fork."
   type        = string

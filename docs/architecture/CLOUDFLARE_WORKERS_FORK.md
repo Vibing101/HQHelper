@@ -36,8 +36,12 @@ Not implemented yet:
 - REST API parity with the Express server
 - Durable Object realtime session layer
 - Frontend migration away from `socket.io-client`
-- Automated schema application to D1 from Terraform
 - Terraform CLI compatibility validation beyond local `terraform init`
+
+Implemented after bootstrap:
+
+- Terraform-driven D1 schema application via versioned SQL files in `app/workers/sql`
+- Terraform `local-exec` step that runs `wrangler d1 migrations apply --remote` after D1 database creation
 
 ## Milestones
 
@@ -52,14 +56,21 @@ Not implemented yet:
 ## Terraform note
 
 Cloudflare Terraform can provision the Worker, custom domain, and D1 database directly.
-Applying SQL migrations to D1 is not covered by the current Terraform resources in this repo yet,
-so the schema file is staged but not wired into `terraform apply` in this milestone.
+This repo now handles SQL schema application through Terraform by keeping D1 migrations as
+versioned `.sql` files under `app/workers/sql` and invoking Wrangler from Terraform after
+the D1 database resource exists.
 
-On this machine, `terraform init -backend=false` succeeded for the new environment, but
-`terraform validate` failed while loading the Cloudflare provider under Terraform `1.7.5`.
-Treat the Workers environment as requiring a newer Terraform CLI than the one currently installed here.
+Implementation choice:
 
-The next infrastructure step is to decide whether D1 schema application should be handled by:
+- Terraform creates the D1 database with the Cloudflare provider.
+- Terraform tracks the hash of the SQL files in `app/workers/sql`.
+- When the database identity or SQL hash changes, Terraform reruns a local migration step.
+- That step executes `wrangler d1 migrations apply DB --remote` against a temporary config
+  generated from Terraform outputs, keeping the actual database ID in sync without storing
+  account-specific Wrangler config in the repo.
 
-- a Terraform-driven API call/provisioner workflow, or
-- a Worker bootstrap endpoint invoked by Terraform.
+Operational notes:
+
+- The repo is pinned to Terraform `1.14.7` via `.terraform-version`.
+- `terraform validate` succeeds outside the Codex sandbox.
+- The migration step requires `npx` and a valid Cloudflare auth context in the shell running `terraform apply`.

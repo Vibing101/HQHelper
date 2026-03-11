@@ -1,6 +1,12 @@
 locals {
   worker_hostname = "${var.worker_subdomain}.${var.cf_zone_name}"
   worker_entry    = "${path.module}/../../../../app/workers/src/index.mjs"
+  worker_root     = "${path.module}/../../../../app/workers"
+  worker_sql_dir  = "${local.worker_root}/sql"
+  d1_schema_hash = sha256(join("", [
+    for file_name in sort(fileset(local.worker_sql_dir, "*.sql")) :
+    "${file_name}:${filesha256("${local.worker_sql_dir}/${file_name}")}"
+  ]))
 }
 
 data "cloudflare_zone" "savvy_des" {
@@ -82,4 +88,26 @@ resource "cloudflare_workers_custom_domain" "hq_helper" {
   zone_id     = data.cloudflare_zone.savvy_des.id
   hostname    = local.worker_hostname
   service     = cloudflare_worker.hq_helper.name
+}
+
+resource "terraform_data" "apply_d1_migrations" {
+  count = var.apply_d1_migrations ? 1 : 0
+
+  triggers_replace = [
+    cloudflare_d1_database.hq_helper.id,
+    cloudflare_d1_database.hq_helper.name,
+    local.d1_schema_hash,
+  ]
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = "${path.module}/../../../../scripts/apply-d1-migrations.sh"
+
+    environment = {
+      D1_DATABASE_ID    = cloudflare_d1_database.hq_helper.id
+      D1_DATABASE_NAME  = cloudflare_d1_database.hq_helper.name
+      D1_MIGRATIONS_DIR = local.worker_sql_dir
+      WORKERS_ROOT      = local.worker_root
+    }
+  }
 }
