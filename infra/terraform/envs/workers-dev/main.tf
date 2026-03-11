@@ -77,8 +77,9 @@ resource "cloudflare_workers_deployment" "hq_helper" {
 }
 
 resource "cloudflare_workers_custom_domain" "hq_helper" {
-  account_id = var.cloudflare_account_id
-  zone_id    = data.cloudflare_zone.savvy_des.id
-  hostname   = local.worker_hostname
-  service    = cloudflare_worker.hq_helper.name
+  account_id  = var.cloudflare_account_id
+  environment = var.worker_environment
+  zone_id     = data.cloudflare_zone.savvy_des.id
+  hostname    = local.worker_hostname
+  service     = cloudflare_worker.hq_helper.name
 }

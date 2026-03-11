@@ -1,6 +1,7 @@
 cloudflare_account_id = "replace-me"
 cf_zone_name          = "savvy-des.com"
 worker_name           = "hq-helper-dev"
+worker_environment    = "production"
 worker_subdomain      = "HQHelper"
 d1_name               = "hq-helper-dev"
 d1_primary_location_hint = "weur"

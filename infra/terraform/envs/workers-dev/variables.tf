@@ -21,6 +21,12 @@ variable "worker_name" {
   default     = "hq-helper-dev"
 }
 
+variable "worker_environment" {
+  description = "Cloudflare Worker environment name used by resources that require it."
+  type        = string
+  default     = "production"
+}
+
 variable "worker_subdomain" {
   description = "Subdomain for the Cloudflare Workers fork."
   type        = string
