@@ -1,3 +1,8 @@
+-- APPEND-ONLY: Do not modify this file after it has been applied to any environment.
+-- To change the schema, add a new numbered migration file (e.g. 003_my_change.sql).
+-- Editing an applied file will be detected by apply-d1-migrations.sh and cause a
+-- hard failure to prevent silent schema drift between environments.
+
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS campaigns (

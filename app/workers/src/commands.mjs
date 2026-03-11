@@ -274,7 +274,7 @@ export async function executeCommand(cmd, context) {
       if (!session) throw new Error("Session not found");
       assertSessionInCampaign(session, campaignId);
       const monsters = [...session.monsters, {
-        id: `${cmd.monsterTypeId}-${Date.now()}`,
+        id: createId(cmd.monsterTypeId),
         monsterTypeId: cmd.monsterTypeId,
         label: cmd.label,
         bodyPointsCurrent: cmd.bodyPointsMax,

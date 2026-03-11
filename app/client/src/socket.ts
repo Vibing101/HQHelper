@@ -24,6 +24,7 @@ let lastJoinParams: JoinParams | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let currentSessionId: string | undefined;
 let intentionalClose = false;
+let reconnectAttempt = 0;
 
 const stateUpdateHandlers = new Set<(update: any) => void>();
 const errorHandlers = new Set<(err: { message: string }) => void>();
@@ -92,6 +93,7 @@ async function connectSocket() {
   });
 
   ws.addEventListener("open", () => {
+    reconnectAttempt = 0;
     requestSnapshot(currentSessionId).catch((err) => emitError(err instanceof Error ? err.message : "Failed to load snapshot"));
   });
 
@@ -118,9 +120,15 @@ async function connectSocket() {
   ws.addEventListener("close", () => {
     socket = null;
     if (!intentionalClose && lastJoinParams) {
-      reconnectTimer = setTimeout(() => {
-        joinSession(lastJoinParams).catch((err) => emitError(err instanceof Error ? err.message : "Reconnect failed"));
-      }, 1000);
+      if (reconnectAttempt >= 10) {
+        emitError("Realtime connection lost — reload the page");
+      } else {
+        const delay = Math.min(30000, 1000 * 2 ** reconnectAttempt) + Math.random() * 500;
+        reconnectAttempt += 1;
+        reconnectTimer = setTimeout(() => {
+          connectSocket().catch((err) => emitError(err instanceof Error ? err.message : "Reconnect failed"));
+        }, delay);
+      }
     }
     intentionalClose = false;
   });
@@ -133,6 +141,7 @@ async function connectSocket() {
 }
 
 export async function joinSession(params: JoinParams): Promise<void> {
+  reconnectAttempt = 0;
   lastJoinParams = params;
   currentSessionId = params.sessionId;
   if (reconnectTimer) {
