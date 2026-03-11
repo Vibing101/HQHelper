@@ -1,4 +1,4 @@
-import { requireToken, signToken, verifyToken } from "./auth.mjs";
+import { requireToken, signToken } from "./auth.mjs";
 import { HERO_BASE_STATS, QUESTS } from "./data.mjs";
 import {
   buildSnapshot,
@@ -328,25 +328,49 @@ async function notifyRealtime(env, campaignId, message) {
   });
 }
 
-async function handleRealtimeUpgrade(request, url, env) {
-  const token = url.searchParams.get("token");
-  if (!token) {
-    return error("Unauthorized: token required", 401);
+async function handleRealtimeTicket(request, env) {
+  const auth = await requireToken(request, env);
+  if (auth.error) {
+    return json(auth.error.body, { status: auth.error.status });
   }
 
-  let payload;
-  try {
-    payload = await verifyToken(env, token);
-  } catch {
-    return error("Unauthorized: invalid or expired token", 401);
+  const ticket = crypto.randomUUID();
+  const expiresAt = Date.now() + 30_000;
+  const ticketData = {
+    ticket,
+    campaignId: auth.payload.campaignId,
+    payload: auth.payload,
+    expiresAt,
+  };
+
+  const stub = getRealtimeStub(env, auth.payload.campaignId);
+  await stub.fetch("https://realtime.internal/store-ticket", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(ticketData),
+  });
+
+  return json({ ticket });
+}
+
+async function handleRealtimeUpgrade(request, url, env) {
+  const ticket = url.searchParams.get("ticket");
+  if (!ticket) {
+    return error("Unauthorized: ticket required", 401);
+  }
+
+  const campaignId = url.searchParams.get("campaignId") ?? "";
+  if (!campaignId) {
+    return error("Unauthorized: campaignId required", 401);
   }
 
   const sessionId = url.searchParams.get("sessionId") ?? "";
   const clientId = crypto.randomUUID();
-  const stub = getRealtimeStub(env, payload.campaignId);
-  const upstream = new Request(`https://realtime.internal/connect?clientId=${encodeURIComponent(clientId)}&sessionId=${encodeURIComponent(sessionId)}`, {
-    headers: request.headers,
-  });
+  const stub = getRealtimeStub(env, campaignId);
+  const upstream = new Request(
+    `https://realtime.internal/connect?ticket=${encodeURIComponent(ticket)}&clientId=${encodeURIComponent(clientId)}&sessionId=${encodeURIComponent(sessionId)}`,
+    { headers: request.headers }
+  );
   return stub.fetch(upstream);
 }
 
@@ -580,6 +604,10 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/api/realtime" && request.headers.get("upgrade") === "websocket") {
       return handleRealtimeUpgrade(request, url, env);
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/realtime/ticket") {
+      return handleRealtimeTicket(request, env);
     }
 
     if (request.method === "GET" && url.pathname === "/api/realtime/snapshot") {

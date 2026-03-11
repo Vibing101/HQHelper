@@ -8,6 +8,32 @@ export class CampaignRealtimeHub {
     const url = new URL(request.url);
 
     if (request.headers.get("upgrade") === "websocket") {
+      const ticket = url.searchParams.get("ticket");
+      if (!ticket) {
+        return new Response(JSON.stringify({ error: "Unauthorized: ticket required" }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      // Look up and immediately delete the ticket (one-time use).
+      const ticketData = await this.state.storage.get(ticket);
+      if (!ticketData) {
+        return new Response(JSON.stringify({ error: "Unauthorized: invalid or already-used ticket" }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      await this.state.storage.delete(ticket);
+
+      // Reject expired tickets.
+      if (Date.now() > ticketData.expiresAt) {
+        return new Response(JSON.stringify({ error: "Unauthorized: ticket has expired" }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
       const pair = new WebSocketPair();
       const client = pair[0];
       const server = pair[1];
@@ -15,7 +41,7 @@ export class CampaignRealtimeHub {
       const sessionId = url.searchParams.get("sessionId") ?? "";
 
       server.accept();
-      this.connections.set(clientId, { socket: server, sessionId });
+      this.connections.set(clientId, { socket: server, sessionId, payload: ticketData.payload });
 
       server.addEventListener("close", () => {
         this.connections.delete(clientId);
@@ -26,6 +52,12 @@ export class CampaignRealtimeHub {
 
       server.send(JSON.stringify({ type: "joined" }));
       return new Response(null, { status: 101, webSocket: client });
+    }
+
+    if (request.method === "POST" && url.pathname.endsWith("/store-ticket")) {
+      const ticketData = await request.json();
+      await this.state.storage.put(ticketData.ticket, ticketData);
+      return new Response(null, { status: 204 });
     }
 
     if (request.method === "POST" && url.pathname.endsWith("/broadcast")) {

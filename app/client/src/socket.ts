@@ -56,11 +56,26 @@ async function requestSnapshot(sessionId?: string) {
   emitStateUpdate({ type: "SYNC_SNAPSHOT", snapshot: data.snapshot });
 }
 
-function connectSocket() {
+async function connectSocket() {
   const token = getStoredToken();
   if (!token) throw new Error("Unauthorized: token required");
   const sessionId = currentSessionId ?? "";
-  const ws = new WebSocket(`${WS_URL}/api/realtime?token=${encodeURIComponent(token)}&sessionId=${encodeURIComponent(sessionId)}`);
+  const campaignId = lastJoinParams?.campaignId ?? "";
+
+  // Exchange the bearer token for a short-lived opaque ticket so the JWT never
+  // appears in the WebSocket URL (which Cloudflare logs in plain text).
+  const ticketRes = await fetch(`${SERVER_URL}/api/realtime/ticket`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!ticketRes.ok) {
+    throw new Error("Failed to obtain realtime ticket");
+  }
+  const { ticket } = await ticketRes.json() as { ticket: string };
+
+  const ws = new WebSocket(
+    `${WS_URL}/api/realtime?ticket=${encodeURIComponent(ticket)}&campaignId=${encodeURIComponent(campaignId)}&sessionId=${encodeURIComponent(sessionId)}`
+  );
   socket = ws;
 
   const opened = new Promise<void>((resolve, reject) => {
