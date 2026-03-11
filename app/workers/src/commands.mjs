@@ -61,6 +61,11 @@ function ensureAuthorizedHero(payload, hero) {
   return payload.role === "gm" || hero.playerId === payload.playerId;
 }
 
+function assertSessionInCampaign(session, campaignId) {
+  const sessionCampaignId = session.campaignId ?? session.campaign_id;
+  if (sessionCampaignId !== campaignId) throw new Error("Session does not belong to this campaign");
+}
+
 async function refresh(notify, campaignId, sessionId) {
   await notify(campaignId, { type: "refresh", sessionId });
 }
@@ -108,6 +113,7 @@ export async function executeCommand(cmd, context) {
       if (payload.role !== "gm") throw new Error("Only GM can adjust monster stats");
       const rawSession = await getRawSession(db, cmd.sessionId);
       if (!rawSession) throw new Error("Session not found");
+      assertSessionInCampaign(rawSession, campaignId);
       const monsters = parseJson(rawSession.monsters_json, []);
       const monster = monsters.find((entry) => entry.id === cmd.entityId);
       if (!monster) throw new Error("Monster not found");
@@ -222,6 +228,7 @@ export async function executeCommand(cmd, context) {
       if (payload.role !== "gm") throw new Error("Only GM can end a session");
       const session = await getSessionById(db, cmd.sessionId);
       if (!session) throw new Error("Session not found");
+      assertSessionInCampaign(session, campaignId);
       await db.batch([
         db.prepare("UPDATE sessions SET ended_at = ? WHERE id = ?").bind(nowIso(), cmd.sessionId),
         db.prepare("UPDATE campaigns SET current_session_id = NULL WHERE id = ?").bind(session.campaignId),
@@ -252,6 +259,7 @@ export async function executeCommand(cmd, context) {
       if (payload.role !== "gm") throw new Error("Only GM can reveal rooms");
       const session = await getSessionById(db, cmd.sessionId);
       if (!session) throw new Error("Session not found");
+      assertSessionInCampaign(session, campaignId);
       const rooms = [...session.rooms];
       const idx = rooms.findIndex((room) => room.roomId === cmd.roomId);
       if (idx === -1) rooms.push({ roomId: cmd.roomId, state: cmd.state });
@@ -264,6 +272,7 @@ export async function executeCommand(cmd, context) {
       if (payload.role !== "gm") throw new Error("Only GM can spawn monsters");
       const session = await getSessionById(db, cmd.sessionId);
       if (!session) throw new Error("Session not found");
+      assertSessionInCampaign(session, campaignId);
       const monsters = [...session.monsters, {
         id: `${cmd.monsterTypeId}-${Date.now()}`,
         monsterTypeId: cmd.monsterTypeId,
@@ -281,6 +290,7 @@ export async function executeCommand(cmd, context) {
       if (payload.role !== "gm") throw new Error("Only GM can remove monsters");
       const session = await getSessionById(db, cmd.sessionId);
       if (!session) throw new Error("Session not found");
+      assertSessionInCampaign(session, campaignId);
       const monsters = session.monsters.filter((monster) => monster.id !== cmd.monsterId);
       await db.prepare("UPDATE sessions SET monsters_json = ? WHERE id = ?").bind(JSON.stringify(monsters), cmd.sessionId).run();
       await refresh(notify, session.campaignId, cmd.sessionId);
@@ -290,6 +300,7 @@ export async function executeCommand(cmd, context) {
       if (payload.role !== "gm") throw new Error("Only GM can update monster statuses");
       const session = await getSessionById(db, cmd.sessionId);
       if (!session) throw new Error("Session not found");
+      assertSessionInCampaign(session, campaignId);
       const monsters = session.monsters.map((monster) =>
         monster.id === cmd.monsterId
           ? { ...monster, statusFlags: { ...(monster.statusFlags ?? {}), [cmd.status]: cmd.value } }
@@ -489,6 +500,8 @@ export async function executeCommand(cmd, context) {
         const activeSessionId = cmd.sessionId ?? campaign.currentSessionId;
         if (!activeSessionId) throw new Error("Hideout rest requires an active session");
         const session = await getSessionById(db, activeSessionId);
+        if (!session) throw new Error("Session not found");
+        assertSessionInCampaign(session, hero.campaignId);
         const flags = { ...(session.sessionFlags ?? {}) };
         const restFlagKey = `hideoutRestUsedByHero:${hero.id}`;
         if (hero.hideoutRestUsedThisQuest || flags[restFlagKey] === true) throw new Error("Hideout rest already used for this hero in this quest");
