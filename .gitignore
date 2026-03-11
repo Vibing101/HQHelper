@@ -5,6 +5,7 @@ dist/
 .env.production
 SESSION_CONTEXT.md
 docs/SESSION_HANDOFF_HQHELPER.md
+docs/RESOLUTION_PLAN.md
 .DS_Store
 
 # Terraform
