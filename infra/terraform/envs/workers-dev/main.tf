@@ -44,6 +44,11 @@ resource "cloudflare_worker_version" "hq_helper" {
       id   = cloudflare_d1_database.hq_helper.id
     },
     {
+      type       = "durable_object_namespace"
+      name       = "HQ_REALTIME"
+      class_name = "CampaignRealtimeHub"
+    },
+    {
       type = "plain_text"
       name = "APP_ENV"
       text = var.environment
@@ -59,6 +64,11 @@ resource "cloudflare_worker_version" "hq_helper" {
       text = "bootstrap"
     }
   ]
+
+  migrations = {
+    tag                = "v1"
+    new_sqlite_classes = ["CampaignRealtimeHub"]
+  }
 
   modules = [
     {
@@ -79,6 +89,16 @@ resource "cloudflare_worker_version" "hq_helper" {
     {
       name         = "repository.mjs"
       content_file = "${local.worker_root}/src/repository.mjs"
+      content_type = "application/javascript+module"
+    },
+    {
+      name         = "commands.mjs"
+      content_file = "${local.worker_root}/src/commands.mjs"
+      content_type = "application/javascript+module"
+    },
+    {
+      name         = "realtime.mjs"
+      content_file = "${local.worker_root}/src/realtime.mjs"
       content_type = "application/javascript+module"
     }
   ]

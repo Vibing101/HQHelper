@@ -1,14 +1,10 @@
 /// <reference types="vite/client" />
-import { io, Socket } from "socket.io-client";
 import type { SocketCommand, CombatDieFace } from "@hq/shared";
 import { getStoredToken } from "./store/authStore";
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "http://localhost:4000";
+const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? window.location.origin;
+const WS_URL = SERVER_URL.replace(/^http/, "ws");
 
-// Keep only the sessionId from JoinParams — campaignId/role/playerId are now
-// derived from the verified JWT on the server, so clients no longer supply them.
-// The full shape is retained here for backward compatibility with existing callers
-// (the server simply ignores the now-redundant fields).
 type JoinParams = {
   campaignId?: string;
   sessionId?: string;
@@ -16,63 +12,171 @@ type JoinParams = {
   playerId?: string;
 };
 
-let socket: Socket | null = null;
+type DiceRoll = {
+  rollType: "attack" | "defense";
+  diceCount: number;
+  results: CombatDieFace[];
+  rollerName: string;
+};
+
+let socket: WebSocket | null = null;
 let lastJoinParams: JoinParams | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let currentSessionId: string | undefined;
+let intentionalClose = false;
 
-export function getSocket(): Socket {
-  if (!socket) {
-    socket = io(SERVER_URL, {
-      // Use a callback so every connection attempt (including reconnects)
-      // reads the latest token from storage rather than capturing a stale value.
-      auth: (cb) => cb({ token: getStoredToken() ?? "" }),
-      autoConnect: false,
-    });
+const stateUpdateHandlers = new Set<(update: any) => void>();
+const errorHandlers = new Set<(err: { message: string }) => void>();
+const diceRollHandlers = new Set<(roll: DiceRoll) => void>();
 
-    // Re-join rooms automatically after a reconnect so socket room membership
-    // is restored without requiring a page reload.
-    socket.on("reconnect", () => {
-      if (lastJoinParams) {
-        socket!.emit("join", { sessionId: lastJoinParams.sessionId });
-        socket!.emit("command", { type: "REQUEST_SNAPSHOT", sessionId: lastJoinParams.sessionId });
-      }
-    });
-  }
-  return socket;
+function emitStateUpdate(update: any) {
+  for (const handler of stateUpdateHandlers) handler(update);
 }
 
-export function joinSession(params: JoinParams): Promise<void> {
-  lastJoinParams = params;
-  return new Promise((resolve, reject) => {
-    const s = getSocket();
-    s.connect();
-    // Only pass sessionId to the server — identity comes from the JWT
-    s.emit("join", { sessionId: params.sessionId });
-    s.once("joined", () => {
-      s.emit("command", { type: "REQUEST_SNAPSHOT", sessionId: params.sessionId });
-      resolve();
-    });
-    s.once("connect_error", (err) => reject(err));
+function emitError(message: string) {
+  for (const handler of errorHandlers) handler({ message });
+}
+
+function emitDiceRoll(roll: DiceRoll) {
+  for (const handler of diceRollHandlers) handler(roll);
+}
+
+async function requestSnapshot(sessionId?: string) {
+  const token = getStoredToken();
+  if (!token) return;
+  const query = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : "";
+  const res = await fetch(`${SERVER_URL}/api/realtime/snapshot${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
+  const data = await res.json();
+  if (!res.ok) {
+    emitError(data.error ?? "Failed to load snapshot");
+    return;
+  }
+  emitStateUpdate({ type: "SYNC_SNAPSHOT", snapshot: data.snapshot });
+}
+
+function connectSocket() {
+  const token = getStoredToken();
+  if (!token) throw new Error("Unauthorized: token required");
+  const sessionId = currentSessionId ?? "";
+  const ws = new WebSocket(`${WS_URL}/api/realtime?token=${encodeURIComponent(token)}&sessionId=${encodeURIComponent(sessionId)}`);
+  socket = ws;
+
+  const opened = new Promise<void>((resolve, reject) => {
+    const onOpen = () => {
+      ws.removeEventListener("error", onError);
+      resolve();
+    };
+    const onError = () => {
+      ws.removeEventListener("open", onOpen);
+      reject(new Error("Realtime connection failed"));
+    };
+    ws.addEventListener("open", onOpen, { once: true });
+    ws.addEventListener("error", onError, { once: true });
+  });
+
+  ws.addEventListener("open", () => {
+    requestSnapshot(currentSessionId).catch((err) => emitError(err instanceof Error ? err.message : "Failed to load snapshot"));
+  });
+
+  ws.addEventListener("message", (event) => {
+    try {
+      const message = JSON.parse(String(event.data));
+      if (message.type === "joined") return;
+      if (message.type === "refresh") {
+        requestSnapshot(message.sessionId ?? currentSessionId).catch((err) => emitError(err instanceof Error ? err.message : "Failed to refresh"));
+        return;
+      }
+      if (message.type === "dice_roll") {
+        emitDiceRoll(message);
+        return;
+      }
+      if (message.type === "error") {
+        emitError(message.message ?? "Realtime error");
+      }
+    } catch {
+      emitError("Malformed realtime payload");
+    }
+  });
+
+  ws.addEventListener("close", () => {
+    socket = null;
+    if (!intentionalClose && lastJoinParams) {
+      reconnectTimer = setTimeout(() => {
+        joinSession(lastJoinParams).catch((err) => emitError(err instanceof Error ? err.message : "Reconnect failed"));
+      }, 1000);
+    }
+    intentionalClose = false;
+  });
+
+  ws.addEventListener("error", () => {
+    emitError("Realtime connection failed");
+  });
+
+  return opened;
+}
+
+export async function joinSession(params: JoinParams): Promise<void> {
+  lastJoinParams = params;
+  currentSessionId = params.sessionId;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+    intentionalClose = true;
+    socket.close();
+  }
+  await connectSocket();
 }
 
 export function sendCommand(cmd: SocketCommand) {
-  getSocket().emit("command", cmd);
+  if (cmd.type === "REQUEST_SNAPSHOT") {
+    requestSnapshot(cmd.sessionId ?? currentSessionId).catch((err) => emitError(err instanceof Error ? err.message : "Failed to refresh"));
+    return;
+  }
+
+  const token = getStoredToken();
+  if (!token) {
+    emitError("Unauthorized: token required");
+    return;
+  }
+
+  fetch(`${SERVER_URL}/api/commands`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ...cmd, sessionId: "sessionId" in cmd && cmd.sessionId ? cmd.sessionId : currentSessionId }),
+  })
+    .then(async (res) => {
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Command failed");
+      }
+    })
+    .catch((err) => emitError(err instanceof Error ? err.message : "Command failed"));
 }
 
 export function onStateUpdate(handler: (update: any) => void) {
-  const s = getSocket();
-  s.on("state_update", handler);
-  return () => { s.off("state_update", handler); };
+  stateUpdateHandlers.add(handler);
+  return () => {
+    stateUpdateHandlers.delete(handler);
+  };
 }
 
 export function onError(handler: (err: { message: string }) => void) {
-  const s = getSocket();
-  s.on("error", handler);
-  return () => { s.off("error", handler); };
+  errorHandlers.add(handler);
+  return () => {
+    errorHandlers.delete(handler);
+  };
 }
 
-export function onDiceRoll(handler: (roll: { rollType: "attack" | "defense"; diceCount: number; results: CombatDieFace[]; rollerName: string }) => void) {
-  const s = getSocket();
-  s.on("dice_roll", handler);
-  return () => { s.off("dice_roll", handler); };
+export function onDiceRoll(handler: (roll: DiceRoll) => void) {
+  diceRollHandlers.add(handler);
+  return () => {
+    diceRollHandlers.delete(handler);
+  };
 }

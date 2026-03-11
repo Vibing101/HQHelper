@@ -170,3 +170,29 @@ export async function getSessionById(db, sessionId) {
   const row = await db.prepare("SELECT * FROM sessions WHERE id = ?").bind(sessionId).first();
   return mapSession(row);
 }
+
+export async function buildSnapshot(db, campaignId, preferredSessionId) {
+  const campaign = await getCampaignById(db, campaignId);
+  if (!campaign) {
+    return {
+      campaign: null,
+      party: null,
+      heroes: [],
+      session: null,
+      requestedAt: new Date().toISOString(),
+    };
+  }
+
+  const party = campaign.partyId ? await getPartyById(db, campaign.partyId) : null;
+  const heroes = await listHeroesByCampaign(db, campaignId);
+  const sessionId = preferredSessionId ?? campaign.currentSessionId ?? undefined;
+  const session = sessionId ? await getSessionById(db, sessionId) : null;
+
+  return {
+    campaign,
+    party,
+    heroes,
+    session,
+    requestedAt: new Date().toISOString(),
+  };
+}

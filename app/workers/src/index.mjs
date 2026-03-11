@@ -1,6 +1,7 @@
-import { requireToken, signToken } from "./auth.mjs";
+import { requireToken, signToken, verifyToken } from "./auth.mjs";
 import { HERO_BASE_STATS, QUESTS } from "./data.mjs";
 import {
+  buildSnapshot,
   createId,
   createJoinCode,
   getCampaignById,
@@ -10,6 +11,8 @@ import {
   getSessionById,
   listHeroesByCampaign,
 } from "./repository.mjs";
+import { executeCommand } from "./commands.mjs";
+import { CampaignRealtimeHub } from "./realtime.mjs";
 
 const APP_TITLE = "HQ Helper";
 
@@ -276,6 +279,75 @@ async function handleGetSession(url, env) {
   return json({ session });
 }
 
+function getRealtimeStub(env, campaignId) {
+  const id = env.HQ_REALTIME.idFromName(campaignId);
+  return env.HQ_REALTIME.get(id);
+}
+
+async function notifyRealtime(env, campaignId, message) {
+  const stub = getRealtimeStub(env, campaignId);
+  await stub.fetch("https://realtime.internal/broadcast", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(message),
+  });
+}
+
+async function handleRealtimeUpgrade(request, url, env) {
+  const token = url.searchParams.get("token");
+  if (!token) {
+    return error("Unauthorized: token required", 401);
+  }
+
+  let payload;
+  try {
+    payload = await verifyToken(env, token);
+  } catch {
+    return error("Unauthorized: invalid or expired token", 401);
+  }
+
+  const sessionId = url.searchParams.get("sessionId") ?? "";
+  const clientId = crypto.randomUUID();
+  const stub = getRealtimeStub(env, payload.campaignId);
+  const upstream = new Request(`https://realtime.internal/connect?clientId=${encodeURIComponent(clientId)}&sessionId=${encodeURIComponent(sessionId)}`, {
+    headers: request.headers,
+  });
+  return stub.fetch(upstream);
+}
+
+async function handleRealtimeSnapshot(request, url, env) {
+  const auth = await requireToken(request, env);
+  if (auth.error) {
+    return json(auth.error.body, { status: auth.error.status });
+  }
+  const sessionId = url.searchParams.get("sessionId") ?? undefined;
+  const snapshot = await buildSnapshot(env.DB, auth.payload.campaignId, sessionId);
+  return json({ snapshot });
+}
+
+async function handleCommand(request, env) {
+  const auth = await requireToken(request, env);
+  if (auth.error) {
+    return json(auth.error.body, { status: auth.error.status });
+  }
+
+  const cmd = await readJson(request);
+  if (!cmd?.type) {
+    return error("Command type is required", 400);
+  }
+
+  try {
+    await executeCommand(cmd, {
+      db: env.DB,
+      payload: auth.payload,
+      notify: (campaignId, message) => notifyRealtime(env, campaignId, message),
+    });
+    return json({ ok: true });
+  } catch (err) {
+    return error(err instanceof Error ? err.message : "Command failed", 400);
+  }
+}
+
 async function checkDatabase(env) {
   try {
     const result = await env.DB.prepare("SELECT 1 AS ok").first();
@@ -471,6 +543,17 @@ function renderHome(env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/api/realtime" && request.headers.get("upgrade") === "websocket") {
+      return handleRealtimeUpgrade(request, url, env);
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/realtime/snapshot") {
+      return handleRealtimeSnapshot(request, url, env);
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/commands") {
+      return handleCommand(request, env);
+    }
 
     if (request.method === "POST" && url.pathname === "/api/campaigns") {
       return handleCreateCampaign(request, env);
@@ -541,3 +624,5 @@ export default {
     return html(renderHome(env));
   }
 };
+
+export { CampaignRealtimeHub };
