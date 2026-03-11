@@ -73,18 +73,18 @@ async function handleCreateCampaign(request, env) {
   await env.DB.batch([
     env.DB
       .prepare(
-        `INSERT INTO parties (
-          id, campaign_id, reputation_tokens, unlocked_mercenary_types, mercenaries_json
-        ) VALUES (?, ?, 0, '[]', '[]')`
-      )
-      .bind(partyId, campaignId),
-    env.DB
-      .prepare(
         `INSERT INTO campaigns (
           id, name, join_code, enabled_packs, party_id, current_session_id, created_at
         ) VALUES (?, ?, ?, ?, ?, NULL, ?)`
       )
       .bind(campaignId, name, joinCode, JSON.stringify(enabledPacks), partyId, createdAt),
+    env.DB
+      .prepare(
+        `INSERT INTO parties (
+          id, campaign_id, reputation_tokens, unlocked_mercenary_types, mercenaries_json
+        ) VALUES (?, ?, 0, '[]', '[]')`
+      )
+      .bind(partyId, campaignId),
     ...questLog.map((entry) =>
       env.DB
         .prepare(

@@ -165,8 +165,9 @@ export async function executeCommand(cmd, context) {
       } else {
         spells = spells.filter((spell) => spell !== cmd.spell);
       }
-      await db.prepare("UPDATE heroes SET spells_json = ?, updated_at = ? WHERE id = ?")
-        .bind(JSON.stringify(spells), nowIso(), hero.id).run();
+      const elfStatement = db.prepare("UPDATE heroes SET spells_json = ?, updated_at = ? WHERE id = ?")
+        .bind(JSON.stringify(spells), nowIso(), hero.id);
+      let wizardStatement = null;
       if (cmd.chosen && hero.heroTypeId === "elf" && spells.length === 1) {
         const wizardRow = await db.prepare("SELECT * FROM heroes WHERE campaign_id = ? AND hero_type_id = 'wizard'").bind(hero.campaignId).first();
         if (wizardRow) {
@@ -175,11 +176,16 @@ export async function executeCommand(cmd, context) {
             const taken = new Set([...wizard.spellsChosenThisQuest, ...spells]);
             const remaining = ALL_SPELL_ELEMENTS.find((element) => !taken.has(element));
             if (remaining) {
-              await db.prepare("UPDATE heroes SET spells_json = ?, updated_at = ? WHERE id = ?")
-                .bind(JSON.stringify([...wizard.spellsChosenThisQuest, remaining]), nowIso(), wizard.id).run();
+              wizardStatement = db.prepare("UPDATE heroes SET spells_json = ?, updated_at = ? WHERE id = ?")
+                .bind(JSON.stringify([...wizard.spellsChosenThisQuest, remaining]), nowIso(), wizard.id);
             }
           }
         }
+      }
+      if (wizardStatement) {
+        await db.batch([elfStatement, wizardStatement]);
+      } else {
+        await elfStatement.run();
       }
       await refresh(notify, hero.campaignId, cmd.sessionId);
       return;
@@ -393,15 +399,6 @@ export async function executeCommand(cmd, context) {
       if (!hero) throw new Error("Hero not found");
       const mercenary = MERCENARY_STATS[cmd.mercenaryTypeId];
       if (!mercenary) throw new Error("Unknown mercenary type");
-      if (cmd.payWith === "gold") {
-        if (hero.gold < mercenary.costGold) throw new Error("Not enough gold");
-        await db.prepare("UPDATE heroes SET gold = ?, updated_at = ? WHERE id = ?")
-          .bind(hero.gold - mercenary.costGold, nowIso(), hero.id).run();
-      } else {
-        if (rawParty.reputation_tokens < 1) throw new Error("Not enough reputation tokens");
-        await db.prepare("UPDATE parties SET reputation_tokens = ? WHERE id = ?")
-          .bind(rawParty.reputation_tokens - 1, rawParty.id).run();
-      }
       mercenaries.push({
         id: crypto.randomUUID().slice(0, 8),
         mercenaryTypeId: cmd.mercenaryTypeId,
@@ -410,8 +407,21 @@ export async function executeCommand(cmd, context) {
         bodyPointsMax: mercenary.bodyPointsMax,
         hiredByHeroId: cmd.heroId,
       });
-      await db.prepare("UPDATE parties SET mercenaries_json = ? WHERE id = ?")
-        .bind(JSON.stringify(mercenaries), rawParty.id).run();
+      if (cmd.payWith === "gold") {
+        if (hero.gold < mercenary.costGold) throw new Error("Not enough gold");
+        await db.batch([
+          db.prepare("UPDATE heroes SET gold = ?, updated_at = ? WHERE id = ?")
+            .bind(hero.gold - mercenary.costGold, nowIso(), hero.id),
+          db.prepare("UPDATE parties SET mercenaries_json = ? WHERE id = ?")
+            .bind(JSON.stringify(mercenaries), rawParty.id),
+        ]);
+      } else {
+        if (rawParty.reputation_tokens < 1) throw new Error("Not enough reputation tokens");
+        await db.batch([
+          db.prepare("UPDATE parties SET reputation_tokens = ?, mercenaries_json = ? WHERE id = ?")
+            .bind(rawParty.reputation_tokens - 1, JSON.stringify(mercenaries), rawParty.id),
+        ]);
+      }
       await refresh(notify, campaignId, cmd.sessionId);
       return;
     }
