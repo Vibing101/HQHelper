@@ -638,8 +638,36 @@ function renderHome(env) {
 </html>`;
 }
 
+async function handleFkHealthCheck(env) {
+  // Probe whether PRAGMA foreign_keys is actually enforced on this connection.
+  // Try to insert a party row that references a campaign that does not exist.
+  // With FK ON this must produce a constraint error; with FK OFF it silently succeeds.
+  let fkEnforced = false;
+  try {
+    await env.DB
+      .prepare(
+        "INSERT INTO parties (id, campaign_id, reputation_tokens, unlocked_mercenary_types, mercenaries_json) VALUES ('__fk_probe__', '__nonexistent_campaign_fk_probe__', 0, '[]', '[]')"
+      )
+      .run();
+    // FK is OFF — the stray row was inserted; clean it up
+    await env.DB.prepare("DELETE FROM parties WHERE id = '__fk_probe__'").run();
+  } catch {
+    // A constraint error means FK enforcement is active
+    fkEnforced = true;
+  }
+  return json(
+    { ok: fkEnforced, fkEnforced, checkedAt: new Date().toISOString() },
+    { status: fkEnforced ? 200 : 500 }
+  );
+}
+
 export default {
   async fetch(request, env) {
+    // Enable FK enforcement for this D1 connection.
+    // SQLite's foreign_keys PRAGMA defaults to OFF and does not persist across connections.
+    // D1 allocates a fresh connection per Worker invocation, so this must run every request.
+    await env.DB.prepare("PRAGMA foreign_keys = ON").run();
+
     const url = new URL(request.url);
     if (url.pathname === "/api/realtime" && request.headers.get("upgrade") === "websocket") {
       return handleRealtimeUpgrade(request, url, env);
@@ -691,6 +719,10 @@ export default {
 
     if (request.method === "GET" && /^\/api\/sessions\/[^/]+$/.test(url.pathname)) {
       return handleGetSession(request, url, env);
+    }
+
+    if (url.pathname === "/api/health/fk") {
+      return handleFkHealthCheck(env);
     }
 
     if (url.pathname === "/api/health") {
