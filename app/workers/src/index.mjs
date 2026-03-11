@@ -1,5 +1,5 @@
 import { requireToken, signToken } from "./auth.mjs";
-import { HERO_BASE_STATS, QUESTS } from "./data.mjs";
+import { HERO_BASE_STATS, QUESTS, resolveEffectiveRules } from "./data.mjs";
 import {
   buildSnapshot,
   createId,
@@ -170,6 +170,27 @@ async function handleCreateHero(request, env) {
   const stats = HERO_BASE_STATS[heroTypeId];
   if (!stats) {
     return error("Invalid heroTypeId", 400);
+  }
+
+  const campaign = await getCampaignById(env.DB, campaignId);
+  if (!campaign) {
+    return error("Campaign not found", 404);
+  }
+
+  const rules = resolveEffectiveRules(campaign.enabledPacks);
+  if (!rules.allowedHeroes.includes(heroTypeId)) {
+    return error(`Hero type "${heroTypeId}" is not allowed in this campaign's enabled packs`, 400);
+  }
+
+  const heroCountRow = await env.DB
+    .prepare("SELECT COUNT(*) AS cnt FROM heroes WHERE campaign_id = ?")
+    .bind(campaignId)
+    .first();
+  if ((heroCountRow?.cnt ?? 0) >= rules.constraints.maxPartySize) {
+    return error(
+      `Party is full (max ${rules.constraints.maxPartySize} heroes)`,
+      409,
+    );
   }
 
   const existing = await env.DB
